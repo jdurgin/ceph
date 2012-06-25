@@ -182,10 +182,8 @@ namespace librbd {
     string object_prefix;
     string header_oid;
     string id; // only used for new-format images
-    int64_t parent_poolid;
-    string parent_id;
-    snapid_t parent_snapid;
-    uint64_t overlap;
+    uint64_t parent_overlap;
+    ImageCtx *parent;
 
     ObjectCacher *object_cacher;
     LibrbdWriteback *writeback_handler;
@@ -204,8 +202,7 @@ namespace librbd {
 	lock("librbd::ImageCtx::lock"),
 	cache_lock("librbd::ImageCtx::cache_lock"),
 	old_format(true),
-	order(0), size(0), features(0), parent_poolid(-1),
-	parent_snapid(CEPH_NOSNAP), overlap(0),
+	order(0), size(0), features(0), parent_overlap(0), parent(NULL),
 	object_cacher(NULL), writeback_handler(NULL), object_set(NULL)
     {
       md_ctx.dup(p);
@@ -264,9 +261,11 @@ namespace librbd {
 	  return r;
 	}
 
+	cls_client::parent_info parent_info;
 	header_oid = header_name(id);
 	r = cls_client::get_immutable_metadata(&md_ctx, header_oid,
-					       &object_prefix, &order);
+					       &object_prefix, &order,
+					       &parent_info);
 	if (r < 0) {
 	  lderr(cct) << "error reading immutable metadata: "
 		     << cpp_strerror(r) << dendl;
@@ -1983,7 +1982,11 @@ int open_image(ImageCtx *ictx)
   ictx->wctx = wctx;
 
   r = ictx->md_ctx.watch(ictx->header_oid, 0, &(wctx->cookie), wctx);
-  return r;
+  if (r < 0) {
+    close_image(ictx);
+    return r;
+  }
+  
 }
 
 void close_image(ImageCtx *ictx)

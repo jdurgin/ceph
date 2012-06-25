@@ -11,10 +11,12 @@
 namespace librbd {
   namespace cls_client {
     int get_immutable_metadata(librados::IoCtx *ioctx, const std::string &oid,
-			       std::string *object_prefix, uint8_t *order)
+			       std::string *object_prefix, uint8_t *order,
+			       parent_info *parent)
     {
       assert(object_prefix);
       assert(order);
+      assert(parent);
 
       librados::ObjectReadOperation op;
       bufferlist bl, empty;
@@ -22,6 +24,7 @@ namespace librbd {
       ::encode(snap, bl);
       op.exec("rbd", "get_size", bl);
       op.exec("rbd", "get_object_prefix", empty);
+      op.exec("rbd", "get_parent", empty);
 
       bufferlist outbl;
       int r = ioctx->operate(oid, &op, &outbl);
@@ -31,9 +34,16 @@ namespace librbd {
       try {
 	bufferlist::iterator iter = outbl.begin();
 	uint64_t size;
+	// get_size
 	::decode(*order, iter);
 	::decode(size, iter);
+	// get_object_prefix
 	::decode(*object_prefix, iter);
+	// get_parent
+	::decode(parent->pool_id, iter);
+	::decode(parent->image_id, iter);
+	::decode(parent->snap_id, iter);
+	::decode(parent->overlap, iter);
       } catch (const buffer::error &err) {
 	return -EBADMSG;
       }
@@ -51,6 +61,8 @@ namespace librbd {
       assert(size);
       assert(features);
       assert(incompatible_features);
+      assert(lockers);
+      assert(exclusive_lock);
       assert(snapc);
 
       librados::ObjectReadOperation op;
@@ -71,11 +83,15 @@ namespace librbd {
       try {
 	bufferlist::iterator iter = outbl.begin();
 	uint8_t order;
+	// get_size
 	::decode(order, iter);
 	::decode(*size, iter);
+	// get_features
 	::decode(*features, iter);
 	::decode(*incompatible_features, iter);
+	// get_snapcontext
 	::decode(*snapc, iter);
+	// list_locks
 	::decode(*lockers, iter);
 	::decode(*exclusive_lock, iter);
       } catch (const buffer::error &err) {
