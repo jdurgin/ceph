@@ -70,6 +70,8 @@ struct librados::IoCtxImpl {
     objecter = rhs.objecter;
   }
 
+  RadosClient *get_rados();
+
   void set_snap_read(snapid_t s);
   int set_snap_write_context(snapid_t seq, vector<snapid_t>& snaps);
 
