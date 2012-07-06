@@ -41,11 +41,6 @@ librados::IoCtxImpl::IoCtxImpl(RadosClient *c, Objecter *objecter,
 {
 }
 
-librados::RadosClient *librados::IoCtxImpl::get_rados()
-{
-  return client;
-}
-
 void librados::IoCtxImpl::set_snap_read(snapid_t s)
 {
   if (!s)
