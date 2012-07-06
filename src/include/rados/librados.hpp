@@ -322,8 +322,13 @@ namespace librados
     // deep copy
     void dup(const IoCtx& rhs);
 
-    // get RadosClient from IoCtx
-    RadosClient *get_rados();
+    /**
+     * get Rados used by this IoCtx
+     *
+     * This is a weak reference that should not be deleted.
+     * @returns Rados instance used by this IoCtx
+     */
+    Rados *get_rados();
 
     // set pool auid
     int set_auid(uint64_t auid_);
@@ -479,7 +484,6 @@ namespace librados
     static void version(int *major, int *minor, int *extra);
 
     Rados();
-    Rados(IoCtx &ictx);
     ~Rados();
 
     int init(const char * const id);
@@ -531,7 +535,6 @@ namespace librados
     Rados(const Rados& rhs);
     const Rados& operator=(const Rados& rhs);
     RadosClient *client;
-    bool weak;
   };
 }
 

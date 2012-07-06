@@ -438,6 +438,8 @@ rados_config_t rados_ioctx_cct(rados_ioctx_t io);
 
 /**
  * Get the cluster handle used by this rados_ioctx_t
+ * Note that this is a weak reference, and should not
+ * be destroyed via rados_destroy().
  *
  * @param io the io context
  * @returns the cluster handle for this io context

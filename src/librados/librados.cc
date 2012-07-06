@@ -556,9 +556,9 @@ void librados::IoCtx::dup(const IoCtx& rhs)
   io_ctx_impl->dup(*rhs.io_ctx_impl);
 }
 
-librados::RadosClient *librados::IoCtx::get_rados()
+librados::Rados *librados::IoCtx::get_rados()
 {
-  return io_ctx_impl->get_rados();
+  return io_ctx_impl->rados;
 }
 
 int librados::IoCtx::set_auid(uint64_t auid_)
@@ -1025,18 +1025,13 @@ void librados::Rados::version(int *major, int *minor, int *extra)
   rados_version(major, minor, extra);
 }
 
-librados::Rados::Rados() : client(NULL), weak(false)
-{
-}
-
-librados::Rados::Rados(IoCtx &ictx):client(ictx.io_ctx_impl->client), weak(true)
+librados::Rados::Rados() : client(NULL)
 {
 }
 
 librados::Rados::~Rados()
 {
-  if (!weak)
-    shutdown();
+  shutdown();
 }
 
 int librados::Rados::init(const char * const id)
@@ -1173,6 +1168,7 @@ int librados::Rados::ioctx_create(const char *name, IoCtx &io)
   int ret = rados_ioctx_create((rados_t)client, name, &p);
   if (ret)
     return ret;
+  ((IoCtxImpl*)p)->rados = this;
   io.io_ctx_impl = (IoCtxImpl*)p;
   return 0;
 }
@@ -1677,7 +1673,7 @@ extern "C" void rados_ioctx_locator_set_key(rados_ioctx_t io, const char *key)
 extern "C" rados_t rados_ioctx_get_cluster(rados_ioctx_t io)
 {
   librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
-  return static_cast<rados_t>(ctx->get_rados());
+  return (rados_t)ctx->client;
 }
 
 extern "C" int64_t rados_ioctx_get_id(rados_ioctx_t io)

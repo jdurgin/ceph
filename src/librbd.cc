@@ -1440,13 +1440,13 @@ int get_parent_info(ImageCtx *ictx, string *parent_poolname,
 
   Mutex::Locker l(ictx->lock);
 
-  Rados rados(ictx->md_ctx);
-  r = rados.pool_reverse_lookup(ictx->parent_poolid, parent_poolname);
+  Rados *rados = ictx->md_ctx.get_rados();
+  r = rados->pool_reverse_lookup(ictx->parent_poolid, parent_poolname);
   if (r < 0) 
     return r;
 
   IoCtx p_ioctx;
-  r = rados.ioctx_create(parent_poolname->c_str(), p_ioctx);
+  r = rados->ioctx_create(parent_poolname->c_str(), p_ioctx);
   if (r < 0)
     return r;
 

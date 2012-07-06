@@ -50,6 +50,8 @@ struct librados::IoCtxImpl {
   Mutex *lock;
   Objecter *objecter;
 
+  Rados *rados;
+
   IoCtxImpl();
   IoCtxImpl(RadosClient *c, Objecter *objecter, Mutex *client_lock,
 	    int poolid, const char *pool_name, snapid_t s);

@@ -37,7 +37,7 @@ librados::IoCtxImpl::IoCtxImpl(RadosClient *c, Objecter *objecter,
     assert_ver(0), notify_timeout(c->cct->_conf->client_notify_timeout),
     oloc(poolid),
     aio_write_list_lock("librados::IoCtxImpl::aio_write_list_lock"),
-    aio_write_seq(0), lock(client_lock), objecter(objecter)
+    aio_write_seq(0), lock(client_lock), objecter(objecter), rados(NULL)
 {
 }
 
