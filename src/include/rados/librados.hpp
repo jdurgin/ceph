@@ -484,6 +484,7 @@ namespace librados
     static void version(int *major, int *minor, int *extra);
 
     Rados();
+    Rados(IoCtx& ioctx);
     ~Rados();
 
     int init(const char * const id);

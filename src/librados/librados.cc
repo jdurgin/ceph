@@ -1029,14 +1029,25 @@ librados::Rados::Rados() : client(NULL)
 {
 }
 
+librados::Rados::Rados(IoCtx &ioctx)
+{
+  client = ioctx.io_ctx_impl->client;
+  assert(client != NULL);
+  client->get();
+}
+
 librados::Rados::~Rados()
 {
-  shutdown();
+  if (client->put())
+    shutdown();
 }
 
 int librados::Rados::init(const char * const id)
 {
-  return rados_create((rados_t *)&client, id);
+  int r = rados_create((rados_t *)&client, id);
+  if (r == 0)
+    client->get();
+  return r;
 }
 
 int librados::Rados::init_with_context(config_t cct_)
