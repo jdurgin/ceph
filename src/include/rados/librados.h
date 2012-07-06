@@ -442,7 +442,7 @@ rados_config_t rados_ioctx_cct(rados_ioctx_t io);
  * @param io the io context
  * @returns the cluster handle for this io context
  */
-rados_cluster_t rados_ioctx_get_cluster(rados_ioctx_t io)
+rados_t rados_ioctx_get_cluster(rados_ioctx_t io);
 
 /**
  * Get pool usage statistics
@@ -474,7 +474,7 @@ int64_t rados_pool_lookup(rados_t cluster, const char *pool_name);
  * @param maxlen size of buffer where name will be stored
  * @returns length of string stored, or -ERANGE if buffer too small
  */
-int rados_pool_reverse_lookup(rados_t cluster, int64_t id, const char *buf,
+int rados_pool_reverse_lookup(rados_t cluster, int64_t id, char *buf,
 			      size_t maxlen);
 
 /**

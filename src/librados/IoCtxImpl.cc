@@ -41,7 +41,7 @@ librados::IoCtxImpl::IoCtxImpl(RadosClient *c, Objecter *objecter,
 {
 }
 
-RadosClient *get_rados()
+librados::RadosClient *librados::IoCtxImpl::get_rados()
 {
   return client;
 }

@@ -24,6 +24,7 @@ namespace librados
   class ObjListCtx;
   class PoolAsyncCompletionImpl;
   class RadosClient;
+  class Rados;
 
   typedef void *list_ctx_t;
   typedef uint64_t snap_t;
@@ -321,6 +322,9 @@ namespace librados
     // deep copy
     void dup(const IoCtx& rhs);
 
+    // get RadosClient from IoCtx
+    RadosClient *get_rados();
+
     // set pool auid
     int set_auid(uint64_t auid_);
 
@@ -475,6 +479,7 @@ namespace librados
     static void version(int *major, int *minor, int *extra);
 
     Rados();
+    Rados(IoCtx &ictx);
     ~Rados();
 
     int init(const char * const id);
@@ -526,6 +531,7 @@ namespace librados
     Rados(const Rados& rhs);
     const Rados& operator=(const Rados& rhs);
     RadosClient *client;
+    bool weak;
   };
 }
 

@@ -556,9 +556,9 @@ void librados::IoCtx::dup(const IoCtx& rhs)
   io_ctx_impl->dup(*rhs.io_ctx_impl);
 }
 
-Rados *librados::IoCtx::get_rados()
+librados::RadosClient *librados::IoCtx::get_rados()
 {
-  return static_cast<Rados *>(io_ctx_impl->get_rados());
+  return io_ctx_impl->get_rados();
 }
 
 int librados::IoCtx::set_auid(uint64_t auid_)
@@ -1025,13 +1025,18 @@ void librados::Rados::version(int *major, int *minor, int *extra)
   rados_version(major, minor, extra);
 }
 
-librados::Rados::Rados() : client(NULL)
+librados::Rados::Rados() : client(NULL), weak(false)
+{
+}
+
+librados::Rados::Rados(IoCtx &ictx):client(ictx.io_ctx_impl->client), weak(true)
 {
 }
 
 librados::Rados::~Rados()
 {
-  shutdown();
+  if (!weak)
+    shutdown();
 }
 
 int librados::Rados::init(const char * const id)
@@ -1424,12 +1429,12 @@ extern "C" int64_t rados_pool_lookup(rados_t cluster, const char *name)
 }
 
 extern "C" int rados_pool_reverse_lookup(rados_t cluster, int64_t id,
-					 const char *buf, size_t maxlen)
+					 char *buf, size_t maxlen)
 {
   librados::RadosClient *radosp = (librados::RadosClient *)cluster;
   std::string name;
   radosp->pool_get_name(id, &name);
-  if (name.length() >= len)
+  if (name.length() >= maxlen)
     return -ERANGE;
   strcpy(buf, name.c_str());
   return name.length();
@@ -1669,10 +1674,10 @@ extern "C" void rados_ioctx_locator_set_key(rados_ioctx_t io, const char *key)
     ctx->oloc.key = "";
 }
 
-extern "C" rados_cluster_t rados_ioctx_get_cluster()
+extern "C" rados_t rados_ioctx_get_cluster(rados_ioctx_t io)
 {
   librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
-  return static_cast<rados_cluster_t>(ctx->get_rados());
+  return static_cast<rados_t>(ctx->get_rados());
 }
 
 extern "C" int64_t rados_ioctx_get_id(rados_ioctx_t io)

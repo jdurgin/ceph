@@ -183,7 +183,7 @@ namespace librbd {
     string header_oid;
     string id; // only used for new-format images
     int64_t parent_poolid;
-    string parent_name;
+    string parent_id;
     snapid_t parent_snapid;
     uint64_t overlap;
 
@@ -340,6 +340,19 @@ namespace librbd {
       if (it != snaps_by_name.end())
 	return it->second.id;
       return CEPH_NOSNAP;
+    }
+
+    int get_snapname(snapid_t snapid, std::string *snapname) const
+    {
+      std::map<std::string, struct SnapInfo>::const_iterator it;
+
+      for (it = snaps_by_name.begin(); it != snaps_by_name.end(); it++) {
+	if (it->second.id == snapid) {
+	  *snapname = it->first;
+	  return 0;
+	}
+      }
+      return -ENOENT;
     }
 
     int get_snap_size(std::string snap_name, uint64_t *size) const
@@ -1246,6 +1259,9 @@ int clone(IoCtx& p_ioctx, const char *p_name, const char *p_snapname,
     lderr(cct) << "couldn't set parent: " << r << dendl;
     goto err_close_child;
   }
+  c_imctx->refresh_lock.Lock();
+  c_imctx->refresh_seq++;
+  c_imctx->refresh_lock.Unlock();
   ldout(cct, 2) << "done." << dendl;
   close_image(p_imctx);
   return 0;
@@ -1421,16 +1437,39 @@ int get_parent_info(ImageCtx *ictx, string *parent_poolname,
   int r = ictx_check(ictx);
   if (r < 0)
     return r;
-  Mutex::Locker(ictx->lock);
-  ostringstream oss;
-  // XXX replace with real poolname lookup
-  oss << "ID:" << ictx->parent_poolid;
-  *parent_poolname = oss.str();
-  oss.seekp(0);
-  *parent_name = ictx->parent_name;
-  // XXX replace with real snapname lookup
-  oss << "ID:" << ictx->parent_snapid;
-  *parent_snapname = oss.str();
+
+  Mutex::Locker l(ictx->lock);
+
+  Rados rados(ictx->md_ctx);
+  r = rados.pool_reverse_lookup(ictx->parent_poolid, parent_poolname);
+  if (r < 0) 
+    return r;
+
+  IoCtx p_ioctx;
+  r = rados.ioctx_create(parent_poolname->c_str(), p_ioctx);
+  if (r < 0)
+    return r;
+
+  r = cls_client::dir_get_name(&p_ioctx, ictx->header_oid, ictx->parent_id,
+			       parent_name);
+  if (r < 0)
+    return r;
+
+  // for parent snapname, we need to open the parent ImageCtx, for which
+  // we use the same rados handle
+  ImageCtx p_imctx(*parent_name, NULL, p_ioctx);
+  r = open_image(&p_imctx);
+  if (r < 0)
+    return r;
+
+  // and now we can look up the name in the ImageCtx
+  r = p_imctx.get_snapname(ictx->parent_snapid, parent_snapname);
+  // failure or no, close the ImageCtx
+  close_image(&p_imctx);
+
+  if (r < 0) 
+    return r;
+
   return 0;
 }
 
@@ -1720,10 +1759,9 @@ int ictx_refresh(ImageCtx *ictx)
 	return -ENOSYS;
       }
 
-      // what get_parent calls size, we call overlap
       r = cls_client::get_parent(&(ictx->md_ctx), ictx->header_oid,
 				 ictx->snapid, &ictx->parent_poolid,
-				 &ictx->parent_name, &ictx->parent_snapid,
+				 &ictx->parent_id, &ictx->parent_snapid,
 				 &ictx->overlap);
       if (r < 0) {
 	if (r == -ENOENT) {
