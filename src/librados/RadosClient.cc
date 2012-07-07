@@ -65,7 +65,7 @@ librados::RadosClient::RadosClient(CephContext *cct_)
     objecter(NULL),
     lock("radosclient"),
     timer(cct, lock),
-    refcnt(0),
+    refcnt(1),
     finisher(cct),
     max_watch_cookie(0)
 {

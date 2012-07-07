@@ -1044,10 +1044,7 @@ librados::Rados::~Rados()
 
 int librados::Rados::init(const char * const id)
 {
-  int r = rados_create((rados_t *)&client, id);
-  if (r == 0)
-    client->get();
-  return r;
+  return rados_create((rados_t *)&client, id);
 }
 
 int librados::Rados::init_with_context(config_t cct_)

@@ -1450,22 +1450,22 @@ int get_parent_info(ImageCtx *ictx, string *parent_poolname,
   if (r < 0)
     return r;
 
-  r = cls_client::dir_get_name(&p_ioctx, ictx->header_oid, ictx->parent_id,
+  r = cls_client::dir_get_name(&p_ioctx, RBD_DIRECTORY, ictx->parent_id,
 			       parent_name);
   if (r < 0)
     return r;
 
   // for parent snapname, we need to open the parent ImageCtx, for which
   // we use the same rados handle
-  ImageCtx p_imctx(*parent_name, NULL, p_ioctx);
-  r = open_image(&p_imctx);
+  ImageCtx *p_imctx = new ImageCtx(*parent_name, NULL, p_ioctx);
+  r = open_image(p_imctx);
   if (r < 0)
     return r;
 
   // and now we can look up the name in the ImageCtx
-  r = p_imctx.get_snapname(ictx->parent_snapid, parent_snapname);
+  r = p_imctx->get_snapname(ictx->parent_snapid, parent_snapname);
   // failure or no, close the ImageCtx
-  close_image(&p_imctx);
+  close_image(p_imctx);
 
   if (r < 0) 
     return r;
