@@ -20,6 +20,7 @@ namespace librbd {
       string image_id;
       snapid_t snap_id;
       uint64_t overlap;
+      parent_info() : pool_id(-1), snap_id(CEPH_NOSNAP), overlap(0) {}
     };
 
     // high-level interface to the header

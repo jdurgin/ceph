@@ -11,12 +11,10 @@
 namespace librbd {
   namespace cls_client {
     int get_immutable_metadata(librados::IoCtx *ioctx, const std::string &oid,
-			       std::string *object_prefix, uint8_t *order,
-			       parent_info *parent)
+			       std::string *object_prefix, uint8_t *order)
     {
       assert(object_prefix);
       assert(order);
-      assert(parent);
 
       librados::ObjectReadOperation op;
       bufferlist bl, empty;
@@ -24,7 +22,6 @@ namespace librbd {
       ::encode(snap, bl);
       op.exec("rbd", "get_size", bl);
       op.exec("rbd", "get_object_prefix", empty);
-      op.exec("rbd", "get_parent", empty);
 
       bufferlist outbl;
       int r = ioctx->operate(oid, &op, &outbl);
@@ -39,11 +36,6 @@ namespace librbd {
 	::decode(size, iter);
 	// get_object_prefix
 	::decode(*object_prefix, iter);
-	// get_parent
-	::decode(parent->pool_id, iter);
-	::decode(parent->image_id, iter);
-	::decode(parent->snap_id, iter);
-	::decode(parent->overlap, iter);
       } catch (const buffer::error &err) {
 	return -EBADMSG;
       }
@@ -56,7 +48,8 @@ namespace librbd {
 			     uint64_t *incompatible_features,
                              std::set<std::pair<std::string, std::string> > *lockers,
                              bool *exclusive_lock,
-			     ::SnapContext *snapc)
+			     ::SnapContext *snapc,
+			     parent_info *parent)
     {
       assert(size);
       assert(features);
@@ -64,6 +57,7 @@ namespace librbd {
       assert(lockers);
       assert(exclusive_lock);
       assert(snapc);
+      assert(parent);
 
       librados::ObjectReadOperation op;
       bufferlist sizebl, featuresbl, empty;
@@ -74,6 +68,7 @@ namespace librbd {
       op.exec("rbd", "get_features", featuresbl);
       op.exec("rbd", "get_snapcontext", empty);
       op.exec("rbd", "list_locks", empty);
+      op.exec("rbd", "get_parent", empty);
 
       bufferlist outbl;
       int r = ioctx->operate(oid, &op, &outbl);
@@ -94,6 +89,11 @@ namespace librbd {
 	// list_locks
 	::decode(*lockers, iter);
 	::decode(*exclusive_lock, iter);
+	// get_parent
+	::decode(parent->pool_id, iter);
+	::decode(parent->image_id, iter);
+	::decode(parent->snap_id, iter);
+	::decode(parent->overlap, iter);
       } catch (const buffer::error &err) {
 	return -EBADMSG;
       }
