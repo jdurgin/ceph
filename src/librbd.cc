@@ -85,7 +85,7 @@ namespace librbd {
 
   // raw callbacks
   void rados_cb(rados_completion_t cb, void *arg);
-  void rados_aio_sparse_read_cb(rados_completion_t cb, void *arg);
+  void rbd_aio_read_parent_cb(completion_t comp, void *arg);
 
   class ImageCtx;
   class WatchCtx : public librados::WatchCtx {
@@ -152,20 +152,37 @@ namespace librbd {
 
   struct AioBlockCompletion : Context {
     CephContext *cct;
-    struct AioCompletion *completion;
+    ImageCtx *ictx;
+    AioCompletion *completion;
+    string oid;
     uint64_t ofs;
     size_t len;
+    uint64_t overlap;
     char *buf;
     map<uint64_t,uint64_t> m;
     bufferlist data_bl;
     librados::ObjectWriteOperation write_op;
+    bool tried_parent;
+    AioCompletion *parent_completion;
 
-    AioBlockCompletion(CephContext *cct_, AioCompletion *aio_completion,
-		       uint64_t _ofs, size_t _len, char *_buf)
-      : cct(cct_), completion(aio_completion),
-	ofs(_ofs), len(_len), buf(_buf) {}
+    AioBlockCompletion(CephContext *cct_,
+		       ImageCtx *ictx_,
+		       string oid_,
+		       AioCompletion *aio_completion,
+		       uint64_t _ofs, size_t _len, char *_buf,
+		       uint64_t overlap)
+      : cct(cct_), ictx(ictx_), completion(aio_completion), oid(oid_),
+	ofs(_ofs), len(_len), buf(_buf), tried_parent(false),
+	parent_completion(NULL) {}
     virtual ~AioBlockCompletion() {}
     virtual void finish(int r);
+    /**
+     * After the initial read is done, if the object does not exist,
+     * reads from the parent instead.
+     *
+     * @returns whether reading from the parent was necessary.
+     */
+    bool read_from_parent(int r);
   };
 
   struct ImageCtx {
@@ -580,6 +597,11 @@ namespace librbd {
       lock.Unlock();
       delete wctx;
       wctx = NULL;
+    }
+
+    bool should_read_parent(int r, uint64_t offset, uint64_t length,
+			    uint64_t overlap) {
+      return (parent && r == -ENOENT && offset + length <= overlap);
     }
   };
 
@@ -2242,6 +2264,8 @@ int64_t read_iterate(ImageCtx *ictx, uint64_t off, size_t len,
   uint64_t start_block = get_block_num(ictx->order, off);
   uint64_t end_block = get_block_num(ictx->order, off + len - 1);
   uint64_t block_size = get_block_size(ictx->order);
+  uint64_t overlap = 0;
+  ictx->get_parent_overlap(&overlap);
   ictx->lock.Unlock();
   uint64_t left = len;
 
@@ -2260,15 +2284,23 @@ int64_t read_iterate(ImageCtx *ictx, uint64_t off, size_t len,
       if (r < 0 && r != -ENOENT)
 	return r;
 
-      if (r == -ENOENT)
-	r = cb(total_read, read_len, NULL, arg);
-      else
+      if (r == -ENOENT) {
+	  r = cb(total_read, read_len, NULL, arg);
+      } else {
 	r = cb(total_read, read_len, bl.c_str(), arg);
+      }
 
       bytes_read = read_len; // ObjectCacher pads with zeroes at end of object
     } else {
       map<uint64_t, uint64_t> m;
       r = ictx->data_ctx.sparse_read(oid, m, bl, read_len, block_ofs);
+
+      if (ictx->should_read_parent(r, off + total_read, read_len, overlap)) {
+	bufferptr bp(read_len);
+	bl.append(bp);
+	r = read(ictx->parent, off + total_read, read_len, bl.c_str());
+      }
+
       if (r < 0 && r == -ENOENT)
 	r = 0;
       if (r < 0) {
@@ -2512,6 +2544,27 @@ void AioBlockCompletion::finish(int r)
   completion->complete_block(this, r);
 }
 
+bool AioBlockCompletion::read_from_parent(int r)
+{
+  ldout(cct, 20) << "AioBlockCompletion::read_from_parent() "
+		 << "r = " << r << dendl;
+  if (tried_parent || !ictx->should_read_parent(r, ofs, len, overlap))
+    return false;
+
+  ldout(cct, 20) << "Reading from parent..." << dendl;
+  tried_parent = true;
+  parent_completion = aio_create_completion(this, rbd_aio_read_parent_cb);
+  aio_read(ictx->parent, ofs, len, buf, parent_completion);
+  return true;
+}
+
+void rbd_aio_read_parent_cb(completion_t rbd_comp, void *arg)
+{
+  AioBlockCompletion *block_comp = reinterpret_cast<AioBlockCompletion *>(arg);
+  block_comp->finish(rbd_aio_get_return_value(rbd_comp));
+  delete block_comp;
+}
+
 void AioCompletion::complete_block(AioBlockCompletion *block_completion, ssize_t r)
 {
   CephContext *cct = block_completion->cct;
@@ -2535,7 +2588,11 @@ void AioCompletion::complete_block(AioBlockCompletion *block_completion, ssize_t
 void rados_cb(rados_completion_t c, void *arg)
 {
   AioBlockCompletion *block_completion = (AioBlockCompletion *)arg;
-  block_completion->finish(rados_aio_get_return_value(c));
+  int ret = rados_aio_get_return_value(c);
+  if (block_completion->read_from_parent(ret))
+    return;
+
+  block_completion->finish(ret);
   delete block_completion;
 }
 
@@ -2602,6 +2659,8 @@ int aio_write(ImageCtx *ictx, uint64_t off, size_t len, const char *buf,
   uint64_t end_block = get_block_num(ictx->order, off + len - 1);
   uint64_t block_size = get_block_size(ictx->order);
   snapid_t snap = ictx->snap_id;
+  uint64_t overlap = 0;
+  ictx->get_parent_overlap(&overlap);
   ictx->lock.Unlock();
   uint64_t left = len;
 
@@ -2627,7 +2686,8 @@ int aio_write(ImageCtx *ictx, uint64_t off, size_t len, const char *buf,
       // may block
       ictx->write_to_cache(oid, bl, write_len, block_ofs);
     } else {
-      AioBlockCompletion *block_completion = new AioBlockCompletion(cct, c, off, len, NULL);
+      AioBlockCompletion *block_completion =
+	new AioBlockCompletion(cct, ictx, oid, c, off, len, NULL, overlap);
       c->add_block_completion(block_completion);
       librados::AioCompletion *rados_completion =
 	Rados::aio_create_completion(block_completion, NULL, rados_cb);
@@ -2667,6 +2727,8 @@ int aio_discard(ImageCtx *ictx, uint64_t off, uint64_t len, AioCompletion *c)
   uint64_t start_block = get_block_num(ictx->order, off);
   uint64_t end_block = get_block_num(ictx->order, off + len - 1);
   uint64_t block_size = get_block_size(ictx->order);
+  uint64_t overlap = 0;
+  ictx->get_parent_overlap(&overlap);
   ictx->lock.Unlock();
   uint64_t left = len;
 
@@ -2686,7 +2748,8 @@ int aio_discard(ImageCtx *ictx, uint64_t off, uint64_t len, AioCompletion *c)
     uint64_t block_ofs = get_block_ofs(ictx->order, off + total_write);
     ictx->lock.Unlock();
 
-    AioBlockCompletion *block_completion = new AioBlockCompletion(cct, c, off, len, NULL);
+    AioBlockCompletion *block_completion =
+      new AioBlockCompletion(cct, ictx, oid, c, off, len, NULL, overlap);
 
     uint64_t write_len = min(block_size - block_ofs, left);
 
@@ -2728,18 +2791,11 @@ done:
   return r;
 }
 
-void rados_aio_sparse_read_cb(rados_completion_t c, void *arg)
-{
-  AioBlockCompletion *block_completion = (AioBlockCompletion *)arg;
-  block_completion->finish(rados_aio_get_return_value(c));
-  delete block_completion;
-}
-
 int aio_read(ImageCtx *ictx, uint64_t off, size_t len,
-				char *buf,
-                                AioCompletion *c)
+	     char *buf, AioCompletion *c)
 {
-  ldout(ictx->cct, 20) << "aio_read " << ictx << " off = " << off << " len = " << len << dendl;
+  ldout(ictx->cct, 20) << "aio_read " << ictx << " off = " << off
+		       << " len = " << len << dendl;
 
   int r = ictx_check(ictx);
   if (r < 0)
@@ -2755,13 +2811,14 @@ int aio_read(ImageCtx *ictx, uint64_t off, size_t len,
   uint64_t start_block = get_block_num(ictx->order, off);
   uint64_t end_block = get_block_num(ictx->order, off + len - 1);
   uint64_t block_size = get_block_size(ictx->order);
+  uint64_t overlap = 0;
+  ictx->get_parent_overlap(&overlap);
   ictx->lock.Unlock();
   uint64_t left = len;
 
   c->get();
   c->init_time(ictx, AIO_TYPE_READ);
   for (uint64_t i = start_block; i <= end_block; i++) {
-    bufferlist bl;
     ictx->lock.Lock();
     string oid = get_block_oid(ictx->object_prefix, i, ictx->old_format);
     uint64_t block_ofs = get_block_ofs(ictx->order, off + total_read);
@@ -2772,7 +2829,8 @@ int aio_read(ImageCtx *ictx, uint64_t off, size_t len,
     map<uint64_t,uint64_t>::iterator iter;
 
     AioBlockCompletion *block_completion =
-	new AioBlockCompletion(ictx->cct, c, block_ofs, read_len, buf + total_read);
+      new AioBlockCompletion(ictx->cct, ictx, oid, c, block_ofs, read_len,
+			     buf + total_read, overlap);
     c->add_block_completion(block_completion);
 
     if (ictx->object_cacher) {
@@ -2781,7 +2839,7 @@ int aio_read(ImageCtx *ictx, uint64_t off, size_t len,
 				read_len, block_ofs, block_completion);
     } else {
       librados::AioCompletion *rados_completion =
-	Rados::aio_create_completion(block_completion, rados_aio_sparse_read_cb, NULL);
+	Rados::aio_create_completion(block_completion, rados_cb, NULL);
       r = ictx->data_ctx.aio_sparse_read(oid, rados_completion,
 					 &block_completion->m, &block_completion->data_bl,
 					 read_len, block_ofs);

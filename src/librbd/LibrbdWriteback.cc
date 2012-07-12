@@ -1,6 +1,8 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
+#include <errno.h>
+
 #include "common/ceph_context.h"
 #include "common/dout.h"
 #include "common/Mutex.h"
@@ -27,10 +29,14 @@ struct CallbackArgs {
 static void librbd_writeback_librados_aio_cb(rados_completion_t c, void *arg)
 {
   CallbackArgs *args = reinterpret_cast<CallbackArgs *>(arg);
+  int ret = rados_aio_get_return_value(c);
+  if (ret == -ENOENT) {
+    // TODO: read from parent image
+  }
   ldout(args->cct, 20) << "aio_cb completing " << dendl;
   {
     Mutex::Locker l(*args->lock);
-    args->ctx->complete(rados_aio_get_return_value(c));
+    args->ctx->complete(ret);
   }
   rados_aio_release(c);
   ldout(args->cct, 20) << "aio_cb finished" << dendl;
