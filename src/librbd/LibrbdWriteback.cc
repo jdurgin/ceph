@@ -22,6 +22,7 @@ struct CallbackArgs {
   CephContext *cct;
   Context *ctx;
   Mutex *lock;
+  librbd::AioRequest *req;
   CallbackArgs(CephContext *cct, Context *c, Mutex *l) :
     cct(cct), ctx(c), lock(l) {}
 };

@@ -72,12 +72,6 @@ namespace librbd {
     l_librbd_last,
   };
 
-  typedef enum {
-    AIO_TYPE_READ = 0,
-    AIO_TYPE_WRITE,
-    AIO_TYPE_DISCARD
-  } aio_type_t;
-
   using ceph::bufferlist;
   using librados::snap_t;
   using librados::IoCtx;
@@ -2554,7 +2548,9 @@ bool AioBlockCompletion::read_from_parent(int r)
   ldout(cct, 20) << "Reading from parent..." << dendl;
   tried_parent = true;
   parent_completion = aio_create_completion(this, rbd_aio_read_parent_cb);
-  aio_read(ictx->parent, ofs, len, buf, parent_completion);
+  buffer::ptr bp(len);
+  data_bl.append(bp);
+  aio_read(ictx->parent, ofs, len, data_bl.c_str(), parent_completion);
   return true;
 }
 
