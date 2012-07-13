@@ -1,14 +1,18 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
-#define dout_subsys ceph_subsys_rbd
-#undef dout_prefix
-#define dout_prefix *_dout << "librbd::WatchCtx: "
+#include "common/ceph_context.h"
+#include "common/dout.h"
+#include "common/perf_counters.h"
 
 #include "librbd/ImageCtx.h"
 #include "librbd/internal.h"
 
 #include "librbd/WatchCtx.h"
+
+#define dout_subsys ceph_subsys_rbd
+#undef dout_prefix
+#define dout_prefix *_dout << "librbd::WatchCtx: "
 
 namespace librbd {
 

@@ -14,58 +14,60 @@
 #include "include/rbd/librbd.hpp"
 #include "include/rbd_types.h"
 
-#include "librbd/ImageCtx.h"
+enum {
+  l_librbd_first = 26000,
+
+  l_librbd_rd,               // read ops
+  l_librbd_rd_bytes,         // bytes read
+  l_librbd_rd_latency,       // average latency
+  l_librbd_wr,
+  l_librbd_wr_bytes,
+  l_librbd_wr_latency,
+  l_librbd_discard,
+  l_librbd_discard_bytes,
+  l_librbd_discard_latency,
+  l_librbd_flush,
+
+  l_librbd_aio_rd,               // read ops
+  l_librbd_aio_rd_bytes,         // bytes read
+  l_librbd_aio_rd_latency,
+  l_librbd_aio_wr,
+  l_librbd_aio_wr_bytes,
+  l_librbd_aio_wr_latency,
+  l_librbd_aio_discard,
+  l_librbd_aio_discard_bytes,
+  l_librbd_aio_discard_latency,
+
+  l_librbd_snap_create,
+  l_librbd_snap_remove,
+  l_librbd_snap_rollback,
+
+  l_librbd_notify,
+  l_librbd_resize,
+
+  l_librbd_last,
+};
 
 namespace librbd {
 
-  enum {
-    l_librbd_first = 26000,
+  struct AioCompletion;
+  struct ImageCtx;
 
-    l_librbd_rd,               // read ops
-    l_librbd_rd_bytes,         // bytes read
-    l_librbd_rd_latency,       // average latency
-    l_librbd_wr,
-    l_librbd_wr_bytes,
-    l_librbd_wr_latency,
-    l_librbd_discard,
-    l_librbd_discard_bytes,
-    l_librbd_discard_latency,
-    l_librbd_flush,
-
-    l_librbd_aio_rd,               // read ops
-    l_librbd_aio_rd_bytes,         // bytes read
-    l_librbd_aio_rd_latency,
-    l_librbd_aio_wr,
-    l_librbd_aio_wr_bytes,
-    l_librbd_aio_wr_latency,
-    l_librbd_aio_discard,
-    l_librbd_aio_discard_bytes,
-    l_librbd_aio_discard_latency,
-
-    l_librbd_snap_create,
-    l_librbd_snap_remove,
-    l_librbd_snap_rollback,
-
-    l_librbd_notify,
-    l_librbd_resize,
-
-    l_librbd_last,
+  class NoOpProgressContext : public ProgressContext
+  {
+  public:
+    NoOpProgressContext()
+    {
+    }
+    int update_progress(uint64_t offset, uint64_t src_size)
+    {
+      return 0;
+    }
   };
 
-  const std::string id_obj_name(const std::string &name)
-  {
-    return RBD_ID_PREFIX + name;
-  }
-
-  const std::string header_name(const std::string &image_id)
-  {
-    return RBD_HEADER_PREFIX + image_id;
-  }
-
-  const std::string old_header_name(const std::string &image_name)
-  {
-    return image_name + RBD_SUFFIX;
-  }
+  const std::string id_obj_name(const std::string &name);
+  const std::string header_name(const std::string &image_id);
+  const std::string old_header_name(const std::string &image_name);
 
   int detect_format(librados::IoCtx &io_ctx, const std::string &name,
 		    bool *old_format, uint64_t *size);
@@ -73,9 +75,18 @@ namespace librbd {
   int snap_set(ImageCtx *ictx, const char *snap_name);
   int list(librados::IoCtx& io_ctx, std::vector<std::string>& names);
   int create(librados::IoCtx& io_ctx, const char *imgname, uint64_t size,
-	     int *order, bool old_format);
+	     bool old_format, uint64_t features, int *order);
+  int clone(IoCtx& p_ioctx, const char *p_name, const char *p_snap_name,
+	    IoCtx& c_ioctx, const char *c_name,
+	    uint64_t features, int *c_order);
   int rename(librados::IoCtx& io_ctx, const char *srcname, const char *dstname);
   int info(ImageCtx *ictx, image_info_t& info, size_t image_size);
+  int get_old_format(ImageCtx *ictx, uint8_t *old);
+  int get_features(ImageCtx *ictx, uint64_t *features);
+  int get_overlap(ImageCtx *ictx, uint64_t *overlap);
+  int get_parent_info(ImageCtx *ictx, string *parent_pool_name,
+		      string *parent_name, string *parent_snap_name);
+
   int remove(librados::IoCtx& io_ctx, const char *imgname,
 	     ProgressContext& prog_ctx);
   int resize(ImageCtx *ictx, uint64_t size, ProgressContext& prog_ctx);
@@ -89,7 +100,8 @@ namespace librbd {
   int rm_snap(ImageCtx *ictx, const char *snap_name);
   int ictx_check(ImageCtx *ictx);
   int ictx_refresh(ImageCtx *ictx);
-  int copy(ImageCtx& srci, librados::IoCtx& dest_md_ctx, const char *destname);
+  int copy(ImageCtx *ictx, IoCtx& dest_md_ctx, const char *destname,
+	   ProgressContext &prog_ctx);
 
   int open_parent(ImageCtx *ictx, ImageCtx **parent_ctx,
 		  std::string *parent_pool_name,
@@ -126,7 +138,7 @@ namespace librbd {
   int tmap_rm(librados::IoCtx& io_ctx, const std::string& imgname);
   int rollback_image(ImageCtx *ictx, uint64_t snap_id,
 		     ProgressContext& prog_ctx);
-  void image_info(const ImageCtx& ictx, image_info_t& info, size_t info_size);
+  void image_info(const ImageCtx *ictx, image_info_t& info, size_t info_size);
   std::string get_block_oid(const std::string &object_prefix, uint64_t num,
 			    bool old_format);
   uint64_t get_max_block(uint64_t size, uint8_t obj_order);
@@ -161,17 +173,11 @@ namespace librbd {
 			     int (*cb)(uint64_t, size_t, const char *, void *),
 			     void *arg);
 
-  AioCompletion *aio_create_completion() {
-    AioCompletion *c = new AioCompletion();
-    return c;
-  }
-  AioCompletion *aio_create_completion(void *cb_arg, callback_t cb_complete) {
-    AioCompletion *c = new AioCompletion();
-    c->set_complete_cb(cb_arg, cb_complete);
-    return c;
-  }
+  AioCompletion *aio_create_completion();
+  AioCompletion *aio_create_completion(void *cb_arg, callback_t cb_complete);
 
   // raw callbacks
+  int simple_read_cb(uint64_t ofs, size_t len, const char *buf, void *arg);
   void rados_cb(rados_completion_t cb, void *arg);
   void rados_aio_sparse_read_cb(rados_completion_t cb, void *arg);
 }

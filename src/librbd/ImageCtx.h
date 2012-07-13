@@ -11,22 +11,32 @@
 #include <vector>
 
 #include "common/Mutex.h"
+#include "common/snap_types.h"
 #include "include/buffer.h"
 #include "include/rbd/librbd.hpp"
 #include "include/rbd_types.h"
 #include "include/types.h"
+#include "osdc/ObjectCacher.h"
 
+#include "librbd/cls_rbd_client.h"
 #include "librbd/LibrbdWriteback.h"
+#include "librbd/SnapInfo.h"
+
+class CephContext;
+class PerfCounters;
 
 namespace librbd {
+
+  class WatchCtx;
+
   struct ImageCtx {
     CephContext *cct;
     PerfCounters *perfcounter;
     struct rbd_obj_header_ondisk header;
     ::SnapContext snapc;
-    vector<snap_t> snaps; // this mirrors snapc.snaps, but is in a
-			  // format librados can understand
-    map<std::string, SnapInfo> snaps_by_name;
+    std::vector<librados::snap_t> snaps; // this mirrors snapc.snaps, but is in
+                                         // a format librados can understand
+    std::map<std::string, SnapInfo> snaps_by_name;
     uint64_t snap_id;
     bool snap_exists; // false if our snap_id was deleted
     std::set<std::pair<std::string, std::string> > locks;
@@ -68,10 +78,10 @@ namespace librbd {
     void perf_stop();
     int snap_set(std::string in_snap_name);
     void snap_unset();
-    snap_t get_snap_id(std::string snap_name) const;
+    librados::snap_t get_snap_id(std::string snap_name) const;
     int get_snap_name(snapid_t snap_id, std::string *snap_name) const;
     int get_snap_size(std::string snap_name, uint64_t *size) const;
-    void add_snap(std::string snap_name, snap_t id, uint64_t size,
+    void add_snap(std::string snap_name, librados::snap_t id, uint64_t size,
 		  uint64_t features, cls_client::parent_info parent);
     uint64_t get_image_size() const;
     int get_features(uint64_t *out_features) const;

@@ -5,6 +5,7 @@
 
 #include "common/Cond.h"
 #include "common/Mutex.h"
+#include "common/perf_counters.h"
 #include "include/utime.h"
 #include "include/rbd/librbd.hpp"
 
@@ -18,6 +19,7 @@ namespace librbd {
     AIO_TYPE_DISCARD
   } aio_type_t;
 
+  struct AioBlockCompletion;
   struct AioCompletion {
     Mutex lock;
     Cond cond;
@@ -133,7 +135,7 @@ namespace librbd {
 
   struct AioBlockCompletion : Context {
     CephContext *cct;
-    struct AioCompletion *completion;
+    AioCompletion *completion;
     uint64_t ofs;
     size_t len;
     char *buf;

@@ -1,6 +1,14 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
+#include <errno.h>
+#include <inttypes.h>
+
+#include "common/ceph_context.h"
 #include "common/dout.h"
+#include "common/errno.h"
+
+#include "librbd/AioCompletion.h"
+#include "librbd/ImageCtx.h"
 
 #include "librbd/internal.h"
 
@@ -17,10 +25,26 @@ using std::vector;
 using ceph::bufferlist;
 using librados::snap_t;
 using librados::IoCtx;
+using librados::Rados;
 
 namespace librbd {
-  int detect_format(IoCtx &io_ctx, const std::string &name,
-		    bool *old_format, uint64_t *size);
+  const string id_obj_name(const string &name)
+  {
+    return RBD_ID_PREFIX + name;
+  }
+
+  const string header_name(const string &image_id)
+  {
+    return RBD_HEADER_PREFIX + image_id;
+  }
+
+  const string old_header_name(const string &image_name)
+  {
+    return image_name + RBD_SUFFIX;
+  }
+
+  int detect_format(IoCtx &io_ctx, const string &name,
+		    bool *old_format, uint64_t *size)
   {
     CephContext *cct = (CephContext *)io_ctx.cct();
     if (old_format)
@@ -64,14 +88,14 @@ namespace librbd {
     ondisk.snap_names_len = 0;
   }
 
-  void image_info(ImageCtx& ictx, image_info_t& info, size_t infosize)
+  void image_info(ImageCtx *ictx, image_info_t& info, size_t infosize)
   {
-    int obj_order = ictx.order;
-    info.size = ictx.get_image_size();
+    int obj_order = ictx->order;
+    info.size = ictx->get_image_size();
     info.obj_size = 1 << obj_order;
     info.num_objs = info.size >> obj_order;
     info.order = obj_order;
-    memcpy(&info.block_name_prefix, ictx.object_prefix.c_str(),
+    memcpy(&info.block_name_prefix, ictx->object_prefix.c_str(),
 	   RBD_MAX_BLOCK_NAME_SIZE);
     // clear deprecated fields
     info.parent_pool = -1L;
@@ -708,7 +732,7 @@ namespace librbd {
       return r;
 
     Mutex::Locker l(ictx->lock);
-    image_info(*ictx, info, infosize);
+    image_info(ictx, info, infosize);
     return 0;
   }
 
@@ -1292,17 +1316,17 @@ namespace librbd {
     return ret;
   }
 
-  int copy(ImageCtx& ictx, IoCtx& dest_md_ctx, const char *destname,
+  int copy(ImageCtx *ictx, IoCtx& dest_md_ctx, const char *destname,
 	   ProgressContext &prog_ctx)
   {
     CephContext *cct = (CephContext *)dest_md_ctx.cct();
     CopyProgressCtx cp(prog_ctx);
-    uint64_t src_size = ictx.get_image_size();
+    uint64_t src_size = ictx->get_image_size();
     int64_t r;
 
-    int order = ictx.order;
-    r = create(dest_md_ctx, destname, src_size, ictx.old_format,
-	       ictx.features, &order);
+    int order = ictx->order;
+    r = create(dest_md_ctx, destname, src_size, ictx->old_format,
+	       ictx->features, &order);
     if (r < 0) {
       lderr(cct) << "header creation failed" << dendl;
       return r;
@@ -1316,7 +1340,7 @@ namespace librbd {
       return r;
     }
 
-    r = read_iterate(&ictx, 0, src_size, do_copy_extent, &cp);
+    r = read_iterate(ictx, 0, src_size, do_copy_extent, &cp);
 
     if (r >= 0) {
       // don't return total bytes read, which may not fit in an int
@@ -1520,8 +1544,7 @@ namespace librbd {
     return ret;
   }
 
-  static int simple_read_cb(uint64_t ofs, size_t len, const char *buf,
-			    void *arg)
+  int simple_read_cb(uint64_t ofs, size_t len, const char *buf, void *arg)
   {
     char *dest_buf = (char *)arg;
     if (buf)
@@ -2018,4 +2041,14 @@ namespace librbd {
     return ret;
   }
 
+  AioCompletion *aio_create_completion() {
+    AioCompletion *c = new AioCompletion();
+    return c;
+  }
+
+  AioCompletion *aio_create_completion(void *cb_arg, callback_t cb_complete) {
+    AioCompletion *c = new AioCompletion();
+    c->set_complete_cb(cb_arg, cb_complete);
+    return c;
+  }
 }

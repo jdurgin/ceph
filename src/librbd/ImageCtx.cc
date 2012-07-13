@@ -6,15 +6,11 @@
 #include "common/dout.h"
 #include "common/errno.h"
 #include "common/perf_counters.h"
-#include "common/snap_types.h"
 
-#include "librbd/cls_rbd_client.h"
-#include "librbd/ImageCtx.h"
-#include "librbd/librbd_internal.h"
-#include "librbd/SnapInfo.h"
+#include "librbd/internal.h"
 #include "librbd/WatchCtx.h"
 
-#include "osdc/ObjectCacher.h"
+#include "librbd/ImageCtx.h"
 
 #define dout_subsys ceph_subsys_rbd
 #undef dout_prefix

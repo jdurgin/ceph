@@ -9,6 +9,8 @@
 #include "include/buffer.h"
 #include "include/rados/librados.hpp"
 
+class ImageCtx;
+
 namespace librbd {
 
   class WatchCtx : public librados::WatchCtx {
