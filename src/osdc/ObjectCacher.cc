@@ -621,29 +621,47 @@ void ObjectCacher::bh_read_finish(int64_t poolid, sobject_t oid, loff_t start,
       BufferHead *bh = p->second;
       
       if (bh->start() > opos) {
-        ldout(cct, 1) << "weirdness: gap when applying read results, " 
+        ldout(cct, 1) << "weirdness: gap when applying read results. retrying, "
                 << opos << "~" << bh->start() - opos 
                 << dendl;
+
+	list<Context*> ls;
+	for (map<loff_t, list<Context*> >::iterator p = bh->waitfor_read.begin();
+	     p != bh->waitfor_read.end();
+	     p++)
+	  ls.splice(ls.end(), p->second);
+	bh->waitfor_read.clear();
+	finish_contexts(cct, ls, 0);
+
         opos = bh->start();
         continue;
       }
-      
+
       if (!bh->is_rx()) {
-        ldout(cct, 10) << "bh_read_finish skipping non-rx " << *bh << dendl;
+        ldout(cct, 10) << "bh_read_finish retrying non-rx " << *bh << dendl;
+
+	list<Context*> ls;
+	for (map<loff_t, list<Context*> >::iterator it = bh->waitfor_read.begin();
+	     it != bh->waitfor_read.end();
+	     ++it)
+	  ls.splice(ls.end(), it->second);
+	bh->waitfor_read.clear();
+	finish_contexts(cct, ls, 0);
+
         opos = bh->end();
         p++;
         continue;
       }
-      
+
       assert(opos >= bh->start());
       assert(bh->start() == opos);   // we don't merge rx bh's... yet!
       assert(bh->length() <= start+(loff_t)length-opos);
 
       // finishers?
-      for (map<loff_t, list<Context*> >::iterator p = bh->waitfor_read.begin();
-           p != bh->waitfor_read.end();
-           p++)
-        ls.splice(ls.end(), p->second);
+      for (map<loff_t, list<Context*> >::iterator it = bh->waitfor_read.begin();
+           it != bh->waitfor_read.end();
+           it++)
+        ls.splice(ls.end(), it->second);
       bh->waitfor_read.clear();
       if (bh->error < 0)
 	err = bh->error;
