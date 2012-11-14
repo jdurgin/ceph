@@ -119,12 +119,12 @@ int stress_test(uint64_t num_ops, uint64_t num_objs,
   for (uint64_t i = 0; i < num_ops; ++i) {
     if (!ops[i]->is_read)
       continue;
+    std::cout << "waiting for read " << i << ops[i]->extent << std::endl;
     uint64_t done = 0;
     while (done == 0) {
       done = ops[i]->done.read();
       if (!done) {
 	usleep(500);
-	std::cout << "waiting for read " << i << ops[i]->extent << std::endl;
       }
     }
     if (done > 1) {

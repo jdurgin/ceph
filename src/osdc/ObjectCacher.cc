@@ -599,8 +599,8 @@ void ObjectCacher::bh_read_finish(int64_t poolid, sobject_t oid, loff_t start,
       //   reply to first 1~1 -> ooo ENOENT
       for (map<loff_t, BufferHead*>::iterator p = ob->data.begin(); p != ob->data.end(); ++p) {
 	BufferHead *bh = p->second;
-	if (!bh->is_rx())
-	  continue;
+	//	if (!bh->is_rx())
+	//	  continue;
 	for (map<loff_t, list<Context*> >::iterator p = bh->waitfor_read.begin();
 	     p != bh->waitfor_read.end();
 	     p++)
@@ -625,13 +625,14 @@ void ObjectCacher::bh_read_finish(int64_t poolid, sobject_t oid, loff_t start,
                 << opos << "~" << bh->start() - opos 
                 << dendl;
 
-	list<Context*> ls;
-	for (map<loff_t, list<Context*> >::iterator p = bh->waitfor_read.begin();
-	     p != bh->waitfor_read.end();
-	     p++)
-	  ls.splice(ls.end(), p->second);
+	list<Context*> retries;
+	for (map<loff_t, list<Context*> >::iterator it = bh->waitfor_read.begin();
+	     it != bh->waitfor_read.end();
+	     it++)
+	  retries.splice(retries.end(), it->second);
+	ldout(cct, 20) << "retrying waiters due to gap for " << *bh << dendl;
 	bh->waitfor_read.clear();
-	finish_contexts(cct, ls, 0);
+	finish_contexts(cct, retries, 0);
 
         opos = bh->start();
         continue;
@@ -640,13 +641,14 @@ void ObjectCacher::bh_read_finish(int64_t poolid, sobject_t oid, loff_t start,
       if (!bh->is_rx()) {
         ldout(cct, 10) << "bh_read_finish retrying non-rx " << *bh << dendl;
 
-	list<Context*> ls;
+	list<Context*> retries;
 	for (map<loff_t, list<Context*> >::iterator it = bh->waitfor_read.begin();
 	     it != bh->waitfor_read.end();
 	     ++it)
-	  ls.splice(ls.end(), it->second);
+	  retries.splice(retries.end(), it->second);
+	ldout(cct, 20) << "retrying waiters due to non-rx for " << *bh << dendl;
 	bh->waitfor_read.clear();
-	finish_contexts(cct, ls, 0);
+	finish_contexts(cct, retries, 0);
 
         opos = bh->end();
         p++;
@@ -661,7 +663,7 @@ void ObjectCacher::bh_read_finish(int64_t poolid, sobject_t oid, loff_t start,
       for (map<loff_t, list<Context*> >::iterator it = bh->waitfor_read.begin();
            it != bh->waitfor_read.end();
            it++)
-        ls.splice(ls.end(), it->second);
+	ls.splice(ls.end(), it->second);
       bh->waitfor_read.clear();
       if (bh->error < 0)
 	err = bh->error;
@@ -686,7 +688,7 @@ void ObjectCacher::bh_read_finish(int64_t poolid, sobject_t oid, loff_t start,
 	mark_clean(bh);
       }
 
-      ldout(cct, 10) << "bh_read_finish read " << *bh << dendl;
+      ldout(cct, 10) << "bh_read_finish read " << *bh << " waiters " << ls << dendl;
       p++;
 
       ob->try_merge_bh(bh);
@@ -694,6 +696,8 @@ void ObjectCacher::bh_read_finish(int64_t poolid, sobject_t oid, loff_t start,
   }
 
   // called with lock held.
+  ldout(cct, 20) << "finishing waiters " << ls << dendl;
+
   finish_contexts(cct, ls, err);
 }
 
@@ -1010,12 +1014,12 @@ int ObjectCacher::_readx(OSDRead *rd, ObjectSet *oset, Context *onfinish,
       for (map<loff_t, BufferHead*>::iterator bh_it = missing.begin();
            bh_it != missing.end();
            bh_it++) {
-        bh_read(bh_it->second);
         if (success && onfinish) {
+	  bh_it->second->waitfor_read[bh_it->first].push_back( new C_RetryRead(this, rd, oset, onfinish) );
           ldout(cct, 10) << "readx missed, waiting on " << *bh_it->second 
                    << " off " << bh_it->first << dendl;
-	  bh_it->second->waitfor_read[bh_it->first].push_back( new C_RetryRead(this, rd, oset, onfinish) );
         }
+        bh_read(bh_it->second);
         bytes_not_in_cache += bh_it->second->length();
 	success = false;
       }

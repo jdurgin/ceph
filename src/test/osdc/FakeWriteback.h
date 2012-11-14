@@ -29,6 +29,7 @@ public:
 
   virtual bool may_copy_on_write(const object_t&, uint64_t, uint64_t, snapid_t);
 private:
+  CephContext *m_cct;
   Mutex *m_lock;
   uint64_t m_delay_ns;
   atomic_t m_tid;

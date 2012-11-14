@@ -612,7 +612,7 @@ inline ostream& operator<<(ostream& out, ObjectCacher::BufferHead &bh)
   if (bh.bl.length() > 0) out << " firstbyte=" << (int)bh.bl[0];
   if (bh.error) out << " error=" << bh.error;
   out << "]";
-  out << "waiters = {";
+  out << " waiters = {";
   for (map<loff_t, list<Context*> >::const_iterator it = bh.waitfor_read.begin();
        it != bh.waitfor_read.end(); ++it) {
     out << " " << it->first << "->[";
@@ -622,6 +622,7 @@ inline ostream& operator<<(ostream& out, ObjectCacher::BufferHead &bh)
     }
     out << "]";
   }
+  out << "}";
   return out;
 }
 

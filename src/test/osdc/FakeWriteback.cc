@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <time.h>
 
+#include "common/debug.h"
 #include "common/Cond.h"
 #include "common/Finisher.h"
 #include "common/Mutex.h"
@@ -12,21 +13,35 @@
 
 #include "FakeWriteback.h"
 
+#define dout_subsys ceph_subsys_objectcacher
+#undef dout_prefix
+#define dout_prefix *_dout << "FakeWriteback(" << this << ") "
+
 class C_Delay : public Context {
+  CephContext *m_cct;
   Context *m_con;
   utime_t m_delay;
   Mutex *m_lock;
+  bufferlist *m_bl;
+  uint64_t m_off;
 
   //  Cond *m_cond;
 public:
-  C_Delay(Context *c, Mutex *lock, /*Cond *cond=NULL,*/ uint64_t delay_ns=0)
-    : m_con(c), m_delay(0, delay_ns), m_lock(lock) /*m_cond(cond0)*/ {}
+  C_Delay(CephContext *cct, Context *c, Mutex *lock, uint64_t off,
+	  bufferlist *pbl, /*Cond *cond=NULL,*/ uint64_t delay_ns=0)
+    : m_cct(cct), m_con(c), m_delay(0, delay_ns), m_lock(lock), m_bl(pbl) /*m_cond(cond0)*/ {}
   void finish(int r) {
     struct timespec delay;
     m_delay.to_timespec(&delay);
     nanosleep(&delay, NULL);
     //    if (m_cond)
     //      m_cond.Wait();
+    if (m_bl) {
+      buffer::ptr bp(r);
+      bp.zero();
+      m_bl->append(bp);
+      ldout(m_cct, 20) << "finished read " << m_off << "~" << r << dendl;
+    }
     m_lock->Lock();
     m_con->complete(r);
     m_lock->Unlock();
@@ -34,7 +49,7 @@ public:
 };
 
 FakeWriteback::FakeWriteback(CephContext *cct, Mutex *lock, uint64_t delay_ns)
-  : m_lock(lock), m_delay_ns(delay_ns)
+  : m_cct(cct), m_lock(lock), m_delay_ns(delay_ns)
 {
   m_finisher = new Finisher(cct);
   m_finisher->start();
@@ -52,8 +67,8 @@ tid_t FakeWriteback::read(const object_t& oid,
 			  bufferlist *pbl, uint64_t trunc_size,
 			  __u32 trunc_seq, Context *onfinish)
 {
-  C_Delay *wrapper = new C_Delay(onfinish, m_lock, m_delay_ns);
-  m_finisher->queue(wrapper, -ENOENT);
+  C_Delay *wrapper = new C_Delay(m_cct, onfinish, m_lock, off, pbl, m_delay_ns);
+  m_finisher->queue(wrapper, len);
   return m_tid.inc();
 }
 
@@ -65,7 +80,7 @@ tid_t FakeWriteback::write(const object_t& oid,
 			   uint64_t trunc_size, __u32 trunc_seq,
 			   Context *oncommit)
 {
-  C_Delay *wrapper = new C_Delay(oncommit, m_lock, m_delay_ns);;
+  C_Delay *wrapper = new C_Delay(m_cct, oncommit, m_lock, off, NULL, m_delay_ns);;
   m_finisher->queue(wrapper, 0);
   return m_tid.inc();
 }
