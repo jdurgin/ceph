@@ -220,9 +220,9 @@ static int do_list(librbd::RBD &rbd, librados::IoCtx& io_ctx, bool lflag, const 
 
   TextTable tbl;
 
-  if (f)
+  if (f) {
     f->open_object_section("images");
-  else {
+  } else {
     tbl.define_column("NAME", TextTable::LEFT, TextTable::LEFT);
     tbl.define_column("SIZE", TextTable::RIGHT, TextTable::RIGHT);
     tbl.define_column("PARENT", TextTable::LEFT, TextTable::LEFT);
@@ -331,8 +331,9 @@ static int do_list(librbd::RBD &rbd, librados::IoCtx& io_ctx, bool lflag, const 
   if (f) {
     f->close_section();
     f->flush(cout);
-  } else
+  } else {
     cout << tbl;
+  }
 
   return 0;
 }
@@ -469,11 +470,12 @@ static int do_show_info(const char *imgname, librbd::Image& image,
 
   // snapshot info, if present
   if (snapname) {
-    if (f)
+    if (f) {
       f->dump_string("protected", stringify(snap_protected));
-    else
+    } else {
       cout << "\tprotected: " << (snap_protected ? "True" : "False")
 	   << std::endl;
+    }
   }
 
   // parent info, if present
@@ -494,9 +496,10 @@ static int do_show_info(const char *imgname, librbd::Image& image,
     if (f) {
       f->dump_string("stripe_unit", stringify(prettybyte_t(image.get_stripe_unit())));
       f->dump_string("stripe_count", stringify(image.get_stripe_count()));
-    } else
+    } else {
       cout << "\tstripe unit: " << prettybyte_t(image.get_stripe_unit()) << std::endl
 	   << "\tstripe count: " << image.get_stripe_count() << std::endl;
+    }
   }
 
   if (f) {
@@ -546,9 +549,9 @@ static int do_list_snaps(librbd::Image& image, const char *output_format)
   if (r < 0 || snaps.empty())
     return r;
 
-  if (f)
+  if (f) {
     f->open_object_section("snaps");
-  else {
+  } else {
     t.define_column("SNAPID", TextTable::RIGHT, TextTable::RIGHT);
     t.define_column("NAME", TextTable::LEFT, TextTable::LEFT);
     t.define_column("SIZE", TextTable::RIGHT, TextTable::RIGHT);
@@ -570,9 +573,9 @@ static int do_list_snaps(librbd::Image& image, const char *output_format)
   if (f) {
     f->close_section();
     f->flush(cout);
-  }
-  else
+  } else {
     cout << t;
+  }
 
   return 0;
 }
@@ -709,9 +712,9 @@ static int do_lock_list(librbd::Image& image, const char *output_format)
 	cout << "Lock tag: " << tag << "\n";
     }
 
-    if (f)
+    if (f) {
       f->open_object_section("locks");
-    else {
+    } else {
       tbl.define_column("Locker", TextTable::LEFT, TextTable::LEFT);
       tbl.define_column("ID", TextTable::LEFT, TextTable::LEFT);
       tbl.define_column("Address", TextTable::LEFT, TextTable::LEFT);
@@ -724,15 +727,17 @@ static int do_lock_list(librbd::Image& image, const char *output_format)
         f->dump_string("locker", it->client);
         f->dump_string("address", it->address);
         f->close_section();
-      } else
-      tbl << it->client << it->cookie << it->address << TextTable::endrow;
+      } else {
+	tbl << it->client << it->cookie << it->address << TextTable::endrow;
+      }
     }
 
     if (f) {
       f->close_section();
       f->flush(cout);
-    } else
+    } else {
       cout << tbl;
+    }
   }
   return 0;
 }
@@ -1436,9 +1441,9 @@ static int do_kernel_showmapped(const char *output_format)
     return r;
   }
 
-  if (f)
+  if (f) {
     f->open_object_section("devices");
-  else {
+  } else {
     tbl.define_column("id", TextTable::LEFT, TextTable::LEFT);
     tbl.define_column("pool", TextTable::LEFT, TextTable::LEFT);
     tbl.define_column("image", TextTable::LEFT, TextTable::LEFT);
