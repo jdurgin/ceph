@@ -136,18 +136,39 @@ void usage()
 "  --format <output-format>           output format (default: plain, json, xml)\n";
 }
 
-static string feature_str(uint64_t features)
+static string feature_str(uint64_t feature)
+{
+  switch (feature) {
+  case RBD_FEATURE_LAYERING:
+    return "layering";
+  case RBD_FEATURE_STRIPINGV2:
+    return "striping";
+  default:
+    return "";
+  }
+}
+
+static string features_str(uint64_t features)
 {
   string s = ""; 
 
-  if (features & RBD_FEATURE_LAYERING)
-    s += "layering";
-  if (features & RBD_FEATURE_STRIPINGV2) {
+  for (uint64_t feature = 1; feature <= RBD_FEATURE_STRIPINGV2;
+       feature <<= 1) {
     if (s.size())
       s += ", ";
-    s += "striping";
+    s += feature_str(feature);
   }
   return s;
+}
+
+static void format_features(Formatter *f, uint64_t features)
+{
+  f->open_array_section("features");
+  for (uint64_t feature = 1; feature <= RBD_FEATURE_STRIPINGV2;
+       feature <<= 1) {
+    f->dump_string("feature", feature_str(feature));
+  }
+  f->close_section();
 }
 
 struct MyProgressContext : public librbd::ProgressContext {
@@ -220,7 +241,7 @@ static int do_list(librbd::RBD &rbd, librados::IoCtx& io_ctx, bool lflag,
   TextTable tbl;
 
   if (f) {
-    f->open_object_section("images");
+    f->open_array_section("images");
   } else {
     tbl.define_column("NAME", TextTable::LEFT, TextTable::LEFT);
     tbl.define_column("SIZE", TextTable::RIGHT, TextTable::RIGHT);
@@ -257,8 +278,11 @@ static int do_list(librbd::RBD &rbd, librados::IoCtx& io_ctx, bool lflag,
     if (r < 0 && r != -ENOENT)
       return r;
 
-    if (r != -ENOENT)
+    bool has_parent = false;
+    if (r != -ENOENT) {
       parent = pool + "/" + image + "@" + snap;
+      has_parent = true;
+    }
 
     if (im.stat(info, sizeof(info)) < 0)
       return -EINVAL;
@@ -277,12 +301,19 @@ static int do_list(librbd::RBD &rbd, librados::IoCtx& io_ctx, bool lflag,
     }
 
     if (f) {
-      f->open_object_section(string(*i).c_str());
-      f->dump_string("size", stringify(si_t(info.size)));
-      f->dump_string("parent", parent);
-      f->dump_string("fmt", (old_format) ? "1" : "2");
-      f->dump_string("prot", "");  // protect doesn't apply to images
-      f->dump_string("lock", lockstr);
+      f->open_object_section("image");
+      f->dump_string("image", *i);
+      f->dump_unsigned("size", info.size);
+      if (has_parent) {
+	f->open_object_section("parent");
+	f->dump_string("pool", pool);
+	f->dump_string("image", image);
+	f->dump_string("snapshot", snap);
+	f->close_section();
+      }
+      f->dump_int("format", old_format ? 1 : 2);
+      if (lockers.size())
+	f->dump_string("lock_type", exclusive ? "exclusive" : "shared");
       f->close_section();
     } else {
       tbl << *i
@@ -299,6 +330,7 @@ static int do_list(librbd::RBD &rbd, librados::IoCtx& io_ctx, bool lflag,
       for (std::vector<librbd::snap_info_t>::iterator s = snaplist.begin();
 	   s != snaplist.end(); ++s) {
 	bool is_protected;
+	bool has_parent = false;
 	parent.clear();
 	im.snap_set(s->name.c_str());
 	r = im.snap_is_protected(s->name.c_str(), &is_protected);
@@ -306,17 +338,25 @@ static int do_list(librbd::RBD &rbd, librados::IoCtx& io_ctx, bool lflag,
 	  return r;
 	if (im.parent_info(&pool, &image, &snap) >= 0) {
 	  parent = pool + "/" + image + "@" + snap;
+	  has_parent = true;
 	}
-        if (f) {
-          f->open_object_section((*i + "@" + s->name).c_str());
-          f->dump_string("size", stringify(si_t(s->size)));
-          f->dump_string("parent", parent);
-          f->dump_string("fmt", (old_format) ? "1" : "2");
-          f->dump_string("prot", is_protected ? "yes" : "");
-          f->dump_string("lock", "");  // locks don't apply to snaps
-          f->close_section();
-        } else {
-          tbl << *i + "@" + s->name
+	if (f) {
+	  f->open_object_section("snapshot");
+	  f->dump_string("image", *i);
+	  f->dump_string("snapshot", s->name);
+	  f->dump_unsigned("size", s->size);
+	  if (has_parent) {
+	    f->open_object_section("parent");
+	    f->dump_string("pool", pool);
+	    f->dump_string("image", image);
+	    f->dump_string("snapshot", snap);
+	    f->close_section();
+	  }
+	  f->dump_int("format", old_format ? 1 : 2);
+	  f->dump_string("protected", is_protected ? "true" : "false");
+	  f->close_section();
+	} else {
+	  tbl << *i + "@" + s->name
 	      << stringify(si_t(s->size))
 	      << parent
 	      << ((old_format) ? '1' : '2')
@@ -437,12 +477,12 @@ static int do_show_info(const char *imgname, librbd::Image& image,
   if (f) {
     f->open_object_section("image");
     f->dump_string("name", imgname);
-    f->dump_string("size", stringify(prettybyte_t(info.size)));
-    f->dump_int("objects", info.num_objs);
+    f->dump_unsigned("size", info.size);
+    f->dump_unsigned("objects", info.num_objs);
     f->dump_int("order", info.order);
-    f->dump_string("obj_size", stringify(prettybyte_t(info.obj_size)));
+    f->dump_unsigned("object_size", info.obj_size);
     f->dump_string("block_name_prefix", info.block_name_prefix);
-    f->dump_string("format", (old_format ? "1" : "2"));
+    f->dump_int("format", (old_format ? 1 : 2));
   } else {
     cout << "rbd image '" << imgname << "':\n"
 	 << "\tsize " << prettybyte_t(info.size) << " in "
@@ -459,15 +499,15 @@ static int do_show_info(const char *imgname, librbd::Image& image,
 
   if (!old_format) {
     if (f)
-      f->dump_string("features", feature_str(features));
+      format_features(f, features);
     else
-      cout << "\tfeatures: " << feature_str(features) << std::endl;
+      cout << "\tfeatures: " << features_str(features) << std::endl;
   }
 
   // snapshot info, if present
   if (snapname) {
     if (f) {
-      f->dump_string("protected", stringify(snap_protected));
+      f->dump_string("protected", snap_protected ? "true" : "false");
     } else {
       cout << "\tprotected: " << (snap_protected ? "True" : "False")
 	   << std::endl;
@@ -478,8 +518,12 @@ static int do_show_info(const char *imgname, librbd::Image& image,
   if ((image.parent_info(&parent_pool, &parent_name, &parent_snapname) == 0) &&
       parent_name.length() > 0) {
     if (f) {
-      f->dump_string("parnet", parent_pool + "/" + parent_name);
-      f->dump_string("overlap", stringify(prettybyte_t(overlap)));
+      f->open_object_section("parent");
+      f->dump_string("pool", parent_pool);
+      f->dump_string("image", parent_name);
+      f->dump_string("snapshot", parent_snapname);
+      f->dump_unsigned("overlap", overlap);
+      f->close_section();
     } else {
       cout << "\tparent: " << parent_pool << "/" << parent_name
 	   << "@" << parent_snapname << std::endl;
@@ -490,8 +534,8 @@ static int do_show_info(const char *imgname, librbd::Image& image,
   // striping info, if feature is set
   if (features & RBD_FEATURE_STRIPINGV2) {
     if (f) {
-      f->dump_string("stripe_unit", stringify(prettybyte_t(image.get_stripe_unit())));
-      f->dump_string("stripe_count", stringify(image.get_stripe_count()));
+      f->dump_unsigned("stripe_unit", image.get_stripe_unit());
+      f->dump_unsigned("stripe_count", image.get_stripe_count());
     } else {
       cout << "\tstripe unit: " << prettybyte_t(image.get_stripe_unit())
 	   << std::endl
@@ -553,9 +597,10 @@ static int do_list_snaps(librbd::Image& image, Formatter *f)
   for (std::vector<librbd::snap_info_t>::iterator s = snaps.begin();
        s != snaps.end(); ++s) {
     if (f) {
-      f->open_object_section(stringify(s->id).c_str());
+      f->open_object_section("snapshot");
+      f->dump_unsigned("id", s->id);
       f->dump_string("name", s->name);
-      f->dump_string("size", stringify(prettybyte_t(s->size)));
+      f->dump_unsigned("size", s->size);
       f->close_section();
     } else {
       t << s->id << s->name << stringify(prettybyte_t(s->size))
@@ -658,10 +703,14 @@ static int do_list_children(librbd::Image &image, Formatter *f)
 
   for (set<pair<string, string> >::const_iterator child_it = children.begin();
        child_it != children.end(); child_it++) {
-    if (f)
-      f->dump_string("child", child_it->first + "/" + child_it->second);
-    else
+    if (f) {
+      f->open_object_section("child");
+      f->dump_string("pool", child_it->first);
+      f->dump_string("image", child_it->second);
+      f->close_section();
+    } else {
       cout << child_it->first << "/" << child_it->second << std::endl;
+    }
   }
 
   if (f) {
@@ -706,10 +755,10 @@ static int do_lock_list(librbd::Image& image, Formatter *f)
     for (list<librbd::locker_t>::const_iterator it = lockers.begin();
 	 it != lockers.end(); ++it) {
       if (f) {
-        f->open_object_section(it->cookie.c_str());
-        f->dump_string("locker", it->client);
-        f->dump_string("address", it->address);
-        f->close_section();
+	f->open_object_section(it->cookie.c_str());
+	f->dump_string("locker", it->client);
+	f->dump_string("address", it->address);
+	f->close_section();
       } else {
 	tbl << it->client << it->cookie << it->address << TextTable::endrow;
       }
