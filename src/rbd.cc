@@ -207,9 +207,9 @@ static int do_list(librbd::RBD &rbd, librados::IoCtx& io_ctx, bool lflag, const 
     for (std::vector<string>::const_iterator i = names.begin();
        i != names.end(); ++i) {
        if (f)
-         f->dump_string("name", string(*i).c_str());
+	 f->dump_string("name", string(*i).c_str());
        else
-         cout << *i << std::endl;
+	 cout << *i << std::endl;
     }
     if (f) {
       f->close_section();
@@ -298,11 +298,11 @@ static int do_list(librbd::RBD &rbd, librados::IoCtx& io_ctx, bool lflag, const 
     vector<librbd::snap_info_t> snaplist;
     if (im.snap_list(snaplist) >= 0 && !snaplist.empty()) {
       for (std::vector<librbd::snap_info_t>::iterator s = snaplist.begin();
-           s != snaplist.end(); ++s) {
+	   s != snaplist.end(); ++s) {
 	bool is_protected;
 	parent.clear();
 	im.snap_set(s->name.c_str());
-        r = im.snap_is_protected(s->name.c_str(), &is_protected);
+	r = im.snap_is_protected(s->name.c_str(), &is_protected);
 	if (r < 0)
 	  return r;
 	if (im.parent_info(&pool, &image, &snap) >= 0) {
@@ -324,7 +324,7 @@ static int do_list(librbd::RBD &rbd, librados::IoCtx& io_ctx, bool lflag, const 
 	      << (is_protected ? "yes" : "")
 	      << "" 			// locks don't apply to snaps
 	      << TextTable::endrow;
-        }
+	}
       }
     }
   }
@@ -448,16 +448,16 @@ static int do_show_info(const char *imgname, librbd::Image& image,
     f->dump_string("format", (old_format ? "1" : "2"));
   } else {
     cout << "rbd image '" << imgname << "':\n"
-         << "\tsize " << prettybyte_t(info.size) << " in "
-         << info.num_objs << " objects"
-         << std::endl
-         << "\torder " << info.order
-         << " (" << prettybyte_t(info.obj_size) << " objects)"
-         << std::endl
-         << "\tblock_name_prefix: " << info.block_name_prefix
-         << std::endl
-         << "\tformat: " << (old_format ? "1" : "2")
-         << std::endl;
+	 << "\tsize " << prettybyte_t(info.size) << " in "
+	 << info.num_objs << " objects"
+	 << std::endl
+	 << "\torder " << info.order
+	 << " (" << prettybyte_t(info.obj_size) << " objects)"
+	 << std::endl
+	 << "\tblock_name_prefix: " << info.block_name_prefix
+	 << std::endl
+	 << "\tformat: " << (old_format ? "1" : "2")
+	 << std::endl;
   }
 
   if (!old_format) {
@@ -563,7 +563,7 @@ static int do_list_snaps(librbd::Image& image, const char *output_format)
       f->close_section();
     } else {
       t << s->id << s->name << stringify(prettybyte_t(s->size))
-        << TextTable::endrow;
+	<< TextTable::endrow;
     }
   }
 
@@ -706,7 +706,7 @@ static int do_lock_list(librbd::Image& image, const char *output_format)
 	   << (exclusive ? " exclusive" : " shared")
 	   << " lock" << (one ? "" : "s") << " on this image.\n";
       if (!exclusive)
-        cout << "Lock tag: " << tag << "\n";
+	cout << "Lock tag: " << tag << "\n";
     }
 
     if (f)
@@ -1817,14 +1817,14 @@ int main(int argc, const char **argv)
       std::string err;
       long long ret = strict_strtoll(val.c_str(), 10, &err);
       if (err.empty()) {
-        format = ret;
-        format_specified = true;
-        cerr << "rbd: using --format for specifying the rbd image format is deprecated,"
-             << " use --image-format instead"
-             << std::endl;
+	format = ret;
+	format_specified = true;
+	cerr << "rbd: using --format for specifying the rbd image format is deprecated,"
+	     << " use --image-format instead"
+	     << std::endl;
       } else {
-        output_format = strdup(val.c_str());
-        output_format_specified = true;
+	output_format = strdup(val.c_str());
+	output_format_specified = true;
       }
     } else {
       ++i;
@@ -1936,13 +1936,13 @@ if (!set_conf_param(v, p1, p2, p3)) { \
       opt_cmd != OPT_LIST && opt_cmd != OPT_SNAP_LIST && opt_cmd != OPT_LOCK_LIST &&
       opt_cmd != OPT_CHILDREN) {
     cerr << "rbd: command doesn't use output formatting"
-         << std::endl;
+	 << std::endl;
     return EXIT_FAILURE;
   }
 
   if (format_specified) {
     if (format < 1 || format > 2) {
-      cerr << "rbd: format must be 1 or 2" << std::endl;
+      cerr << "rbd: image format must be 1 or 2" << std::endl;
       return EXIT_FAILURE;
     }
   }
