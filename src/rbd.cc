@@ -588,7 +588,7 @@ static int do_list_snaps(librbd::Image& image, Formatter *f)
     return r;
 
   if (f) {
-    f->open_object_section("snaps");
+    f->open_array_section("snapshots");
   } else {
     t.define_column("SNAPID", TextTable::RIGHT, TextTable::RIGHT);
     t.define_column("NAME", TextTable::LEFT, TextTable::LEFT);
