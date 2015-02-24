@@ -2057,8 +2057,10 @@ reprotect_and_return_err:
 	ictx->snap_exists = false;
       }
 
+      uint64_t snap_features = 0;
+      ictx->get_features(ictx->snap_id, &snap_features);
       RWLock::WLocker object_map_locker(ictx->object_map_lock);
-      if ((ictx->features & RBD_FEATURE_OBJECT_MAP) == 0) {
+      if ((snap_features & RBD_FEATURE_OBJECT_MAP) == 0) {
 	delete ictx->object_map;
 	ictx->object_map = NULL;
       } else {
