@@ -312,12 +312,13 @@ int ImageWatcher::lock() {
   }
 
   if (m_image_ctx.object_map_enabled()) {
-    RWLock::WLocker l2(m_image_ctx.object_map_lock);
     r = m_image_ctx.object_map->lock();
     if (r < 0 && r != -ENOENT) {
       unlock();
       return r;
     }
+    RWLock::RLocker l2(m_image_ctx.snap_lock);
+    RWLock::WLocker l3(m_image_ctx.object_map_lock);
     m_image_ctx.object_map->refresh(CEPH_NOSNAP);
   }
 
