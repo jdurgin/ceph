@@ -475,6 +475,7 @@ namespace librbd {
 
   int ImageCtx::get_flags(librados::snap_t _snap_id, uint64_t *_flags) const
   {
+    assert(snap_lock.is_locked());
     if (_snap_id == CEPH_NOSNAP) {
       *_flags = flags;
       return 0;
@@ -485,6 +486,14 @@ namespace librbd {
       return 0;
     }
     return -ENOENT;
+  }
+
+  bool ImageCtx::test_flags(uint64_t test_flags) const
+  {
+    RWLock::RLocker l(snap_lock);
+    uint64_t snap_flags;
+    get_flags(snap_id, &snap_flags);
+    return ((snap_flags & test_flags) == test_flags);
   }
 
   const parent_info* ImageCtx::get_parent_info(snap_t in_snap_id) const
