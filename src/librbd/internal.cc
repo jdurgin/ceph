@@ -299,7 +299,7 @@ namespace librbd {
     uint64_t bsize = ictx->get_object_size();
     uint64_t numseg;
     {
-      RWLock::RLocker l(ictx->md_lock);
+      RWLock::RLocker l(ictx->snap_lock);
       numseg = Striper::get_num_objects(ictx->layout, ictx->get_current_size());
     }
 
