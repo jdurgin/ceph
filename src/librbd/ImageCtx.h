@@ -69,8 +69,9 @@ namespace librbd {
 
     /**
      * Lock ordering:
-     * owner_lock, md_lock, cache_lock, snap_lock, parent_lock, refresh_lock,
-     * object_map_lock, async_op_lock
+     *
+     * owner_lock, md_lock, cache_lock, snap_lock, features_lock,
+     * parent_lock, refresh_lock, object_map_lock, async_op_lock
      */
     RWLock owner_lock; // protects exclusive lock leadership updates
     RWLock md_lock; // protects access to the mutable image metadata that
@@ -78,6 +79,7 @@ namespace librbd {
                    // (size, features, image locks, etc)
     Mutex cache_lock; // used as client_lock for the ObjectCacher
     RWLock snap_lock; // protects snapshot-related member variables:
+    RWLock features_lock; // protects features
     RWLock parent_lock; // protects parent_md and parent
     Mutex refresh_lock; // protects refresh_seq and last_refresh
     RWLock object_map_lock; // protects object map updates
@@ -158,6 +160,7 @@ namespace librbd {
     uint64_t get_image_size(librados::snap_t in_snap_id) const;
     int get_features(librados::snap_t in_snap_id,
 		     uint64_t *out_features) const;
+    bool test_features(uint64_t test_features) const;
     int get_flags(librados::snap_t in_snap_id, uint64_t *flags) const;
     const parent_info* get_parent_info(librados::snap_t in_snap_id) const;
     int64_t get_parent_pool_id(librados::snap_t in_snap_id) const;

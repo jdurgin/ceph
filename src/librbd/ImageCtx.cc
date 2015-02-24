@@ -45,6 +45,7 @@ namespace librbd {
       md_lock("librbd::ImageCtx::md_lock"),
       cache_lock("librbd::ImageCtx::cache_lock"),
       snap_lock("librbd::ImageCtx::snap_lock"),
+      features_lock("librbd::ImageCtx::features_lock"),
       parent_lock("librbd::ImageCtx::parent_lock"),
       refresh_lock("librbd::ImageCtx::refresh_lock"),
       object_map_lock("librbd::ImageCtx::object_map_lock"),
@@ -439,7 +440,9 @@ namespace librbd {
 
   int ImageCtx::get_features(snap_t in_snap_id, uint64_t *out_features) const
   {
+    assert(snap_lock.is_locked());
     if (in_snap_id == CEPH_NOSNAP) {
+      RWLock::RLocker l(features_lock);
       *out_features = features;
       return 0;
     }
