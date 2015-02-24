@@ -108,8 +108,7 @@ namespace librbd {
     Context *req = new C_Request(m_ictx->cct, onfinish, &m_lock);
 
     {
-      RWLock::RLocker l(m_ictx->md_lock);
-      if (m_ictx->object_map != NULL &&
+      if (m_ictx->object_map_enabled() &&
 	  !m_ictx->object_map->object_may_exist(object_no)) {
 	m_finisher->queue(req, -ENOENT);
 	return;

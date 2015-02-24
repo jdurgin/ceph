@@ -311,7 +311,8 @@ int ImageWatcher::lock() {
     m_owner_client_id = get_client_id();
   }
 
-  if (m_image_ctx.object_map != NULL) {
+  if (m_image_ctx.object_map_enabled()) {
+    RWLock::WLocker l2(m_image_ctx.object_map_lock);
     r = m_image_ctx.object_map->lock();
     if (r < 0 && r != -ENOENT) {
       unlock();

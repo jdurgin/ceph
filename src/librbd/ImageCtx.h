@@ -82,7 +82,7 @@ namespace librbd {
     RWLock features_lock; // protects features
     RWLock parent_lock; // protects parent_md and parent
     Mutex refresh_lock; // protects refresh_seq and last_refresh
-    RWLock object_map_lock; // protects object map updates
+    RWLock object_map_lock; // protects object map updates and object_map itself
     Mutex async_ops_lock; // protects async_ops
     Mutex copyup_list_lock; // protects copyup_waiting_list
 
@@ -163,6 +163,8 @@ namespace librbd {
     bool test_features(uint64_t test_features) const;
     int get_flags(librados::snap_t in_snap_id, uint64_t *flags) const;
     bool test_flags(uint64_t test_flags) const;
+    bool object_map_enabled() const;
+
     const parent_info* get_parent_info(librados::snap_t in_snap_id) const;
     int64_t get_parent_pool_id(librados::snap_t in_snap_id) const;
     std::string get_parent_image_id(librados::snap_t in_snap_id) const;

@@ -141,7 +141,7 @@ void ObjectMap::refresh(uint64_t snap_id)
   CephContext *cct = m_image_ctx.cct;
   ldout(cct, 10) << &m_image_ctx << " refreshing object map" << dendl;
 
-  RWLock::WLocker l(m_image_ctx.object_map_lock);
+  assert(m_image_ctx.object_map_lock.is_wlocked());
   std::string oid(object_map_name(m_image_ctx.id, snap_id));
   int r = cls_client::object_map_load(&m_image_ctx.md_ctx, oid,
                                       &m_object_map);
@@ -322,7 +322,6 @@ bool ObjectMap::Request::should_complete(int r) {
     }
 
     {
-      RWLock::RLocker l(m_image_ctx.md_lock);
       RWLock::WLocker l2(m_image_ctx.object_map_lock);
       ObjectMap *object_map = m_image_ctx.object_map;
       if (object_map != NULL) {

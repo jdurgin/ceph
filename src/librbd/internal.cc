@@ -320,7 +320,7 @@ namespace librbd {
 
     {
       RWLock::WLocker l(ictx->snap_lock);
-      if (ictx->object_map != NULL) {
+      if (ictx->object_map_enabled()) {
 	ictx->object_map->rollback(snap_id);
       }
     }
@@ -585,7 +585,7 @@ namespace librbd {
       }
     }
 
-    if (ictx->object_map != NULL) {
+    if (ictx->object_map_enabled()) {
       r = ictx->md_ctx.remove(ObjectMap::object_map_name(ictx->id, snap_id));
       if (r < 0 && r != -ENOENT) {
 	lderr(ictx->cct) << "snap_remove: failed to remove snapshot object map"
@@ -1786,7 +1786,7 @@ reprotect_and_return_err:
     }
 
     if (!ictx->old_format) {
-      if (ictx->object_map != NULL) {
+      if (ictx->object_map_enabled()) {
 	ictx->object_map->snapshot(snap_id);
       }
       if (lock_owner) {
@@ -2057,6 +2057,7 @@ reprotect_and_return_err:
 	ictx->snap_exists = false;
       }
 
+      RWLock::WLocker object_map_locker(ictx->object_map_lock);
       if ((ictx->features & RBD_FEATURE_OBJECT_MAP) == 0) {
 	delete ictx->object_map;
 	ictx->object_map = NULL;

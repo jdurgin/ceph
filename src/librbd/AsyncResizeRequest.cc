@@ -119,8 +119,7 @@ void AsyncResizeRequest::send_grow_object_map() {
   bool object_map_enabled = true;
   {
     RWLock::RLocker l(m_image_ctx.owner_lock);
-    RWLock::RLocker l2(m_image_ctx.md_lock);
-    if (m_image_ctx.object_map == NULL) {
+    if (!m_image_ctx.object_map_enabled()) {
       object_map_enabled = false;
     } else { 
       ldout(m_image_ctx.cct, 5) << this << " send_grow_object_map: "
@@ -152,8 +151,7 @@ bool AsyncResizeRequest::send_shrink_object_map() {
   bool lost_exclusive_lock = false;
   {
     RWLock::RLocker l(m_image_ctx.owner_lock);
-    RWLock::RLocker l2(m_image_ctx.md_lock);
-    if (m_image_ctx.object_map == NULL ||
+    if (!m_image_ctx.object_map_enabled() ||
 	m_new_size > m_original_size) {
       return true;
     }
