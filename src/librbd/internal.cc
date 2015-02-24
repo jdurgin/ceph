@@ -511,6 +511,7 @@ namespace librbd {
       return r;
     }
 
+    RWLock::WLocker snap_locker(ictx->snap_lock);
     do {
       r = add_snap(ictx, snap_name, lock_owner);
     } while (r == -ESTALE);
@@ -1755,6 +1756,7 @@ reprotect_and_return_err:
   {
     assert(ictx->owner_lock.is_locked());
     assert(ictx->md_lock.is_wlocked());
+    assert(ictx->snap_lock.is_wlocked());
     uint64_t snap_id;
 
     int r = ictx->md_ctx.selfmanaged_snap_create(&snap_id);
