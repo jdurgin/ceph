@@ -163,8 +163,10 @@ namespace librbd {
 	   ictx->image_watcher->is_lock_owner());
 
     C_SaferCond *ctx = new C_SaferCond();
+    ictx->snap_lock.get_read();
     AsyncTrimRequest *req = new AsyncTrimRequest(*ictx, ctx, ictx->size,
 						 newsize, prog_ctx);
+    ictx->snap_lock.put_read();
     req->send();
 
     int r = ctx->wait();
@@ -511,7 +513,6 @@ namespace librbd {
       return r;
     }
 
-    RWLock::WLocker snap_locker(ictx->snap_lock);
     do {
       r = add_snap(ictx, snap_name, lock_owner);
     } while (r == -ESTALE);
@@ -1689,10 +1690,11 @@ reprotect_and_return_err:
 
     uint64_t original_size;
     {
-      RWLock::RLocker l(ictx->md_lock);
+      RWLock::WLocker l(ictx->md_lock);
+      ictx->snap_lock.get_read();
       original_size = ictx->size;
-      if (size < ictx->size) {
-	ictx->flush_async_operations();
+      ictx->snap_lock.put_read();
+      if (size < original_size) {
 	if (ictx->object_cacher) {
 	  // need to invalidate since we're deleting objects, and
 	  // ObjectCacher doesn't track non-existent objects
@@ -1756,7 +1758,6 @@ reprotect_and_return_err:
   {
     assert(ictx->owner_lock.is_locked());
     assert(ictx->md_lock.is_wlocked());
-    assert(ictx->snap_lock.is_wlocked());
     uint64_t snap_id;
 
     int r = ictx->md_ctx.selfmanaged_snap_create(&snap_id);
@@ -1785,6 +1786,7 @@ reprotect_and_return_err:
       return r;
     }
 
+    RWLock::WLocker l(ictx->snap_lock);
     if (!ictx->old_format) {
       if (ictx->object_map_enabled()) {
 	ictx->object_map->snapshot(snap_id);
@@ -2125,8 +2127,10 @@ reprotect_and_return_err:
 	return -EROFS;
       }
 
+      ictx->snap_lock.get_read();
       original_size = ictx->size;
       new_size = ictx->get_image_size(snap_id);
+      ictx->snap_lock.put_read();
 
       // need to flush any pending writes before resizing and rolling back -
       // writes might create new snapshots. Rolling back will replace
