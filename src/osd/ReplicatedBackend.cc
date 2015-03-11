@@ -130,6 +130,7 @@ bool ReplicatedBackend::handle_message(
   OpRequestRef op
   )
 {
+  BLKIN_OP_TRACE_EVENT(op, pg, "handling_message");
   dout(10) << __func__ << ": " << op << dendl;
   switch (op->get_req()->get_type()) {
   case MSG_OSD_PG_PUSH:
@@ -608,8 +609,10 @@ void ReplicatedBackend::op_applied(
   InProgressOp *op)
 {
   dout(10) << __func__ << ": " << op->tid << dendl;
-  if (op->op)
+  if (op->op) {
     op->op->mark_event("op_applied");
+    BLKIN_OP_TRACE_EVENT(op->op, pg, "op_applied");
+  }
 
   op->waiting_for_applied.erase(get_parent()->whoami_shard());
   parent->op_applied(op->v);
@@ -628,8 +631,10 @@ void ReplicatedBackend::op_commit(
   InProgressOp *op)
 {
   dout(10) << __func__ << ": " << op->tid << dendl;
-  if (op->op)
+  if (op->op) {
     op->op->mark_event("op_commit");
+    BLKIN_OP_TRACE_EVENT(op->op, pg, "op_commit");
+  }
 
   op->waiting_for_commit.erase(get_parent()->whoami_shard());
 
@@ -680,12 +685,18 @@ void ReplicatedBackend::sub_op_modify_reply(OpRequestRef op)
     if (r->ack_type & CEPH_OSD_FLAG_ONDISK) {
       assert(ip_op.waiting_for_commit.count(from));
       ip_op.waiting_for_commit.erase(from);
-      if (ip_op.op)
+      if (ip_op.op) {
 	ip_op.op->mark_event("sub_op_commit_rec");
+	BLKIN_OP_TRACE_EVENT(ip_op.op, pg, "sub_op_commit_rec");
+	BLKIN_MSG_TRACE_EVENT(op->get_req(), "span_ended");
+      }
     } else {
       assert(ip_op.waiting_for_applied.count(from));
-      if (ip_op.op)
+      if (ip_op.op) {
 	ip_op.op->mark_event("sub_op_applied_rec");
+	BLKIN_OP_TRACE_EVENT(ip_op.op, pg, "sub_op_applied_rec");
+	BLKIN_MSG_TRACE_EVENT(op->get_req(), "span_ended");
+      }
     }
     ip_op.waiting_for_applied.erase(from);
 

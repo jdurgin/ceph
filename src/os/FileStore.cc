@@ -563,6 +563,7 @@ FileStore::FileStore(const std::string &base, const std::string &jdev, osflagbit
   m_filestore_max_inline_xattrs(0)
 {
   m_filestore_kill_at.set(g_conf->filestore_kill_at);
+  BLKIN_MSG_END(filestore_endpoint, "", 0, "Filestore (" + basedir + "(" + name + ")" + ")");
 
   ostringstream oss;
   oss << basedir << "/current";
@@ -1717,6 +1718,9 @@ void FileStore::queue_op(OpSequencer *osr, Op *o)
   // so that regardless of which order the threads pick up the
   // sequencer, the op order will be preserved.
 
+  if (o->osd_op) {
+    BLKIN_OP_TRACE_EVENT(o->osd_op, osd, "queueing_for_filestore");
+  }
   osr->queue(o);
 
   logger->inc(l_os_ops);
@@ -1728,6 +1732,9 @@ void FileStore::queue_op(OpSequencer *osr, Op *o)
 	  << "   (queue has " << op_queue_len << " ops and " << op_queue_bytes << " bytes)"
 	  << dendl;
   op_wq.queue(osr);
+  if (o->osd_op) {
+    BLKIN_OP_TRACE_EVENT(o->osd_op, osd, "queued_for_filestore");
+  }
 }
 
 void FileStore::op_queue_reserve_throttle(Op *o, ThreadPool::TPHandle *handle)
@@ -1798,8 +1805,17 @@ void FileStore::_do_op(OpSequencer *osr, ThreadPool::TPHandle &handle)
   osr->apply_lock.Lock();
   Op *o = osr->peek_queue();
   apply_manager.op_apply_start(o->op);
+
+  if (o->osd_op) {
+    BLKIN_OP_CREATE_TRACE(o->osd_op, filestore, filestore_endpoint);
+    BLKIN_OP_TRACE_EVENT(o->osd_op, filestore, "filestore_dequeued");
+  }
   dout(5) << "_do_op " << o << " seq " << o->op << " " << *osr << "/" << osr->parent << " start" << dendl;
   int r = _do_transactions(o->tls, o->op, &handle);
+
+  if (o->osd_op) {
+    BLKIN_OP_TRACE_EVENT(o->osd_op, filestore, "filestore_finished");
+  }
   apply_manager.op_apply_finish(o->op);
   dout(10) << "_do_op " << o << " seq " << o->op << " r = " << r
 	   << ", finisher " << o->onreadable << " " << o->onreadable_sync << dendl;
@@ -1809,6 +1825,10 @@ void FileStore::_finish_op(OpSequencer *osr)
 {
   list<Context*> to_queue;
   Op *o = osr->dequeue(&to_queue);
+  if (o->osd_op) {
+    BLKIN_OP_TRACE_EVENT(o->osd_op, filestore, "filestore_finishing_op");
+    BLKIN_OP_TRACE_EVENT(o->osd_op, filestore, "span_ended");
+  }
   
   dout(10) << "_finish_op " << o << " seq " << o->op << " " << *osr << "/" << osr->parent << dendl;
   osr->apply_lock.Unlock();  // locked in _do_op

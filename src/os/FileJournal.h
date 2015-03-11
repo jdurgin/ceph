@@ -215,6 +215,7 @@ public:
   } __attribute__((__packed__, aligned(4)));
 
 private:
+  BLKIN_END_REF(journal_endpoint)
   string fn;
 
   char *zero_buf;
@@ -385,7 +386,10 @@ private:
     write_stop(false),
     aio_stop(false),
     write_thread(this),
-    write_finish_thread(this) { }
+    write_finish_thread(this)
+  {
+    BLKIN_MSG_END(journal_endpoint, "", 0, "Journal (" + fn + ")");
+  }
   ~FileJournal() {
     delete[] zero_buf;
   }
