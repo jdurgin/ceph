@@ -141,6 +141,15 @@ class TestRados(object):
         assert self.rados.pool_exists(u"\u9ec4")
         self.rados.delete_pool(poolname)
 
+    def test_pool_lookup_utf8(self):
+        poolname = "\u9ec4"
+        self.rados.create_pool(poolname)
+        try:
+            poolid = self.rados.pool_lookup(poolname)
+            eq(poolname, self.rados.pool_reverse_lookup(poolid))
+        finally:
+            self.rados.delete_pool(poolname)
+
     def test_create_auid(self):
         self.rados.create_pool('foo', 100)
         assert self.rados.pool_exists('foo')
