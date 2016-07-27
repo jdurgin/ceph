@@ -47,6 +47,13 @@ add_executable(unittest_ecbackend
 add_ceph_unittest(unittest_ecbackend ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/unittest_ecbackend)
 target_link_libraries(unittest_ecbackend osd global)
 
+# unittest_eccache
+add_executable(unittest_eccache
+  TestECCache.cc
+  )
+add_ceph_unittest(unittest_eccache ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/unittest_eccache)
+target_link_libraries(unittest_eccache osd global)
+
 # unittest_osdscrub
 add_executable(unittest_osdscrub
   TestOSDScrub.cc

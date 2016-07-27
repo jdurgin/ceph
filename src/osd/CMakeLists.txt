@@ -12,6 +12,7 @@ set(osd_srcs
   ReplicatedPG.cc
   ReplicatedBackend.cc
   ECBackend.cc
+  ECCache.cc
   ECTransaction.cc
   PGBackend.cc
   OSDCap.cc
