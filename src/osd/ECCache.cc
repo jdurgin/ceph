@@ -104,4 +104,18 @@ map<uint64_t, unique_ptr<Extent> >::iterator Object::extent_lower_bound(uint64_t
   return it;
 }
 
+Cache::Cache() {}
+Cache::~Cache() {}
+
+uint64_t write(const hobject_t &hoid, uint64_t offset, bufferlist &bl) {
+  return m_objects[hoid].write(offset, bl);
+}
+
+void remove(const hobject_t &hoid, uint64_t offset, uint64_t length, uint64_t version) {
+  m_objects[hoid].remove(offset, length, version);
+}
+
+void read(const hobject_t &hoid, uint64_t offset, uint64_t length, bufferlist &out) {
+  m_objects[hoid].read(offset, length, out);
+}
 } // namespace ECCache

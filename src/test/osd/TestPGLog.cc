@@ -491,6 +491,9 @@ TEST_F(PGLogTest, rewind_divergent_log) {
   }
 }
 
+TEST_F(PGLogTest, length_one_divergent_log) {
+}
+
 TEST_F(PGLogTest, merge_old_entry) {
   // entries > last_backfill are silently ignored
   {
