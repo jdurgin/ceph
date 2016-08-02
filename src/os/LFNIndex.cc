@@ -179,6 +179,7 @@ int LFNIndex::collection_list_partial(const ghobject_t &start,
 
 int LFNIndex::fsync_dir(const vector<string> &path)
 {
+  dout(20) << __func__ << " enter " << path << dendl;
   maybe_inject_failure();
   int fd = ::open(get_full_path_subdir(path).c_str(), O_RDONLY);
   if (fd < 0)
@@ -187,6 +188,7 @@ int LFNIndex::fsync_dir(const vector<string> &path)
   maybe_inject_failure();
   int r = ::fsync(fd);
   maybe_inject_failure();
+  dout(20) << __func__ << " exit " << path << dendl;
   if (r < 0)
     return -errno;
   else

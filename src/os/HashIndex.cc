@@ -524,6 +524,7 @@ int HashIndex::start_col_split(const vector<string> &path) {
 }
 
 int HashIndex::start_split(const vector<string> &path) {
+  dout(20) << __func__ << " " << path << " " << dendl;
   bufferlist bl;
   InProgressOp op_tag(InProgressOp::SPLIT, path);
   op_tag.encode(bl);
@@ -544,6 +545,7 @@ int HashIndex::start_merge(const vector<string> &path) {
 }
 
 int HashIndex::end_split_or_merge(const vector<string> &path) {
+  dout(20) << __func__ << " " << path << " " << dendl;
   return remove_attr_path(vector<string>(), IN_PROGRESS_OP_TAG);
 }
 
@@ -624,6 +626,7 @@ int HashIndex::initiate_split(const vector<string> &path, subdir_info_s info) {
 }
 
 int HashIndex::complete_split(const vector<string> &path, subdir_info_s info) {
+  dout(20) << "enter " << __func__ << " " << path << " hash_level=" << info.hash_level << dendl;
   int level = info.hash_level;
   map<string, ghobject_t> objects;
   vector<string> dst = path;
@@ -711,6 +714,7 @@ int HashIndex::complete_split(const vector<string> &path, subdir_info_s info) {
 
     ++i;
   }
+  dout(20) << __func__ << " removing objects " << path << dendl;
   r = remove_objects(path, moved, &objects);
   if (r < 0)
     return r;
