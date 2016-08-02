@@ -200,7 +200,7 @@ int main(int argc, char **argv)
       unsigned col_num = num % vm["num-colls"].as<unsigned>();
       stringstream coll, obj;
       coll << "collection_" << col_num;
-      obj << "obj_" << num << "_bencher_" << (i - benchers.begin());
+      obj << "obj_" << num << "_bencher_veeeerrrrrrrrrrrryyy_loooooooooonnnggggggggggg_nnaaaaaaaaaaaaaammmmmmmmmmmmmmmeeeeeeeeeeeeeeeeeee" << (i - benchers.begin());
       objects.insert(coll.str() + string("/") + obj.str());
     }
     Distribution<
