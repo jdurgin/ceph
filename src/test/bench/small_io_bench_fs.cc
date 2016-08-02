@@ -80,6 +80,10 @@ int main(int argc, char **argv)
      "don't dump per op stats")
     ("num-writers", po::value<unsigned>()->default_value(1),
      "num write threads")
+    ("use-existing", po::value<bool>()->default_value(false),
+     "use existing collections")
+    ("starting-num", po::value<unsigned>()->default_value(0),
+     "number at which to start counting for object names")
     ;
 
   vector<string> ceph_option_strings;
@@ -135,7 +139,9 @@ int main(int argc, char **argv)
   FileStore fs(vm["filestore-path"].as<string>(),
 	       vm["journal-path"].as<string>());
 
-  if (fs.mkfs() < 0) {
+  bool use_existing = vm["use-existing"].as<bool>();
+
+  if (!use_existing && fs.mkfs() < 0) {
     cout << "mkfs failed" << std::endl;
     return 1;
   }
@@ -167,18 +173,20 @@ int main(int argc, char **argv)
     bl.append(0);
   }
 
-  for (uint64_t num = 0; num < vm["num-colls"].as<unsigned>(); ++num) {
-    stringstream coll;
-    coll << "collection_" << num;
-    std::cout << "collection " << coll.str() << std::endl;
-    ObjectStore::Transaction t;
-    t.create_collection(coll_t(coll.str()));
-    fs.apply_transaction(t);
-  }
-  {
-    ObjectStore::Transaction t;
-    t.create_collection(coll_t(string("meta")));
-    fs.apply_transaction(t);
+  if (!use_existing) {
+    for (uint64_t num = 0; num < vm["num-colls"].as<unsigned>(); ++num) {
+      stringstream coll;
+      coll << "collection_" << num;
+      std::cout << "collection " << coll.str() << std::endl;
+      ObjectStore::Transaction t;
+      t.create_collection(coll_t(coll.str()));
+      fs.apply_transaction(t);
+    }
+    {
+      ObjectStore::Transaction t;
+      t.create_collection(coll_t(string("meta")));
+      fs.apply_transaction(t);
+    }
   }
 
   vector<ceph::shared_ptr<Bencher> > benchers(
@@ -187,7 +195,8 @@ int main(int argc, char **argv)
        i != benchers.end();
        ++i) {
     set<string> objects;
-    for (uint64_t num = 0; num < vm["num-objects"].as<unsigned>(); ++num) {
+    for (uint64_t num = vm["starting-num"].as<unsigned>();
+	 num < vm["num-objects"].as<unsigned>(); ++num) {
       unsigned col_num = num % vm["num-colls"].as<unsigned>();
       stringstream coll, obj;
       coll << "collection_" << col_num;
