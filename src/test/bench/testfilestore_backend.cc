@@ -44,6 +44,10 @@ void TestFileStoreBackend::write(
   coll_t c(coll_str);
   hobject_t h(sobject_t(oid.substr(sep+1), 0));
   t->write(c, h, offset, bl.length(), bl);
+  bufferlist attrbl;
+  attrbl.append(oid);
+  attrbl.append(oid);
+  t->setattr(c, h, "_", attrbl);
 
   if (write_infos) {
     bufferlist bl2;
