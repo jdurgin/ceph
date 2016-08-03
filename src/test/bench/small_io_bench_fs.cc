@@ -84,6 +84,8 @@ int main(int argc, char **argv)
      "use existing collections")
     ("starting-num", po::value<unsigned>()->default_value(0),
      "number at which to start counting for object names")
+    ("create-only", po::value<bool>()->default_value(0),
+     "do not write to objects, just create them")
     ;
 
   vector<string> ceph_option_strings;
@@ -195,8 +197,9 @@ int main(int argc, char **argv)
        i != benchers.end();
        ++i) {
     set<string> objects;
-    for (uint64_t num = vm["starting-num"].as<unsigned>();
-	 num < vm["num-objects"].as<unsigned>(); ++num) {
+    unsigned start = vm["starting-num"].as<unsigned>();
+    unsigned end = start + vm["num-objects"].as<unsigned>();
+    for (uint64_t num = start; num < end; ++num) {
       unsigned col_num = num % vm["num-colls"].as<unsigned>();
       stringstream coll, obj;
       coll << "collection_" << col_num;
@@ -242,15 +245,17 @@ int main(int argc, char **argv)
     (*i).reset(bencher);
   }
 
-  for (vector<ceph::shared_ptr<Bencher> >::iterator i = benchers.begin();
-       i != benchers.end();
-       ++i) {
-    (*i)->create();
-  }
-  for (vector<ceph::shared_ptr<Bencher> >::iterator i = benchers.begin();
-       i != benchers.end();
-       ++i) {
-    (*i)->join();
+  if (!vm["create-only"].as<bool>()) {
+    for (vector<ceph::shared_ptr<Bencher> >::iterator i = benchers.begin();
+	 i != benchers.end();
+	 ++i) {
+      (*i)->create();
+    }
+    for (vector<ceph::shared_ptr<Bencher> >::iterator i = benchers.begin();
+	 i != benchers.end();
+	 ++i) {
+      (*i)->join();
+    }
   }
 
   fs.umount();
