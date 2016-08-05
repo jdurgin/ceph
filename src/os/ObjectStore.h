@@ -2149,6 +2149,8 @@ public:
   virtual void set_fsid(uuid_d u) = 0;
   virtual uuid_d get_fsid() = 0;
 
+  virtual int apply_layout_settings(coll_t cid) { assert(0); return 0; }
+
   // DEBUG
   virtual void inject_data_error(const ghobject_t &oid) {}
   virtual void inject_mdata_error(const ghobject_t &oid) {}

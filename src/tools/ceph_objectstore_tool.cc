@@ -3045,6 +3045,8 @@ void usage(po::options_description &desc)
     cerr << std::endl;
     cerr << "ceph-objectstore-tool import-rados <pool> [file]" << std::endl;
     cerr << std::endl;
+    cerr << "ceph-objectstore-tool apply-layout-settings <pool-name> " << std::endl;
+    cerr << std::endl;
     cerr << "<object> can be a JSON object description as displayed" << std::endl;
     cerr << "by --op list." << std::endl;
     cerr << "<object> can be an object name which will be looked up in all" << std::endl;
@@ -3072,6 +3074,61 @@ int mydump_journal(Formatter *f, string journalpath, bool m_journal_dio)
   FileJournal *journal = new FileJournal(uuid_d(), NULL, NULL, journalpath.c_str(), m_journal_dio);
   r = journal->_fdump(*f, false);
   delete journal;
+  return r;
+}
+
+int apply_layout_settings(ObjectStore *os, const OSDSuperblock &superblock,
+			  const string &pool_name, bool dry_run)
+{
+  int r = 0;
+
+  OSDMap curmap;
+  bufferlist bl;
+  r = get_osdmap(os, superblock.current_epoch, curmap, bl);
+  if (r) {
+    cerr << "Can't find local OSDMap: " << cpp_strerror(r) << std::endl;
+    return r;
+  }
+
+  int64_t poolid = curmap.lookup_pg_pool_name(pool_name);
+  if (poolid < 0) {
+    cerr << "Couldn't find pool " << pool_name << ": " << cpp_strerror(poolid)
+	 << std::endl;
+    return poolid;
+  }
+
+  vector<coll_t> collections, in_pool;
+  r = os->list_collections(collections);
+  if (r < 0) {
+    cerr << "Error listing collections: " << cpp_strerror(r) << std::endl;
+    return r;
+  }
+
+  for (vector<coll_t>::const_iterator it = collections.begin();
+       it != collections.end(); ++it) {
+    spg_t pgid;
+    snapid_t snapid;
+    if (it->is_pg(pgid, snapid) && pgid.pool() == (uint64_t)poolid) {
+      in_pool.push_back(*it);
+    }
+  }
+
+  size_t done = 0, total = in_pool.size();
+  for (vector<coll_t>::const_iterator it = in_pool.begin();
+       it != in_pool.end(); ++it, ++done) {
+    if (dry_run) {
+      cerr << "Would apply layout settings to " << *it << std::endl;
+    } else {
+      cerr << "Finished " << done << "/" << total << " collections" << "\r";
+      r = os->apply_layout_settings(*it);
+      if (r < 0) {
+	cerr << "Error applying layout settings to " << *it << std::endl;
+	return r;
+      }
+    }
+  }
+
+  cerr << "Finished " << total << "/" << total << " collections" << "\r" << std::endl;
   return r;
 }
 
@@ -3113,6 +3170,7 @@ int main(int argc, char **argv)
     ("head", "Find head/snapdir when searching for objects by name")
     ("dry-run", "Don't modify the objectstore")
     ("no-overwrite", "For import-rados don't overwrite existing files")
+    ("apply-layout-settings", "For filestore: split directories to match merge_threshold and split_multiple")
     ;
 
   po::options_description positional("Positional options");
@@ -3426,6 +3484,16 @@ int main(int argc, char **argv)
     cerr << "On-disk OSD incompatible features set "
       << unsupported << std::endl;
     ret = -EINVAL;
+    goto out;
+  }
+
+  if (object == "apply-layout-settings") {
+    if (!vm.count("objcmd")) {
+      cerr << "apply-layout-settings requires a pool name" << std::endl;
+      ret = -EINVAL;
+      goto out;
+    }
+    ret = apply_layout_settings(fs, superblock, objcmd, dry_run);
     goto out;
   }
 
