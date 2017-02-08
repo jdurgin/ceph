@@ -74,6 +74,16 @@ bool DBObjectMap::check(std::ostream &out)
       if (header.parent == 0)
 	break;
 
+      boost::optional<string> prev_end;
+      auto complete_iter = db->get_iterator(USER_PREFIX + header_key(header.seq) + COMPLETE_PREFIX);
+      for (; complete_iter->valid(); complete_iter->next()) {
+	if (prev_end && prev_end >= complete_iter->key()) {
+	  out << "overlap in complete range for " << header.oid << std::endl;
+	  return false;
+	}
+	prev_end = string(complete_iter->value().c_str(), complete_iter->value().length() - 1);
+      }
+
       if (!parent_to_num_children.count(header.parent))
 	parent_to_num_children[header.parent] = 0;
       parent_to_num_children[header.parent]++;

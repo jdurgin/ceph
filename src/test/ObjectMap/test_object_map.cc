@@ -447,6 +447,30 @@ public:
     remove_key(*object, *key);
   }
 
+  void auto_remove_keys(ostream &out) {
+    set<string>::iterator object = rand_choose(object_name_space);
+    set<string> kspace;
+    keys_on_object(*object, &kspace);
+    size_t num_to_remove = rand() % (kspace.size() / 2 + 1);
+    out << "remove_keys start" << std::endl;
+    set<string> to_remove;
+    for (size_t i = 0; i < num_to_remove; ++i) {
+      set<string>::iterator key = rand_choose(kspace);
+      if (key == kspace.end())
+	break;
+      to_remove.insert(*key);
+      omap[*object].erase(*key);
+      kspace.erase(key);
+    }
+    if (to_remove.empty())
+      return;
+    out << "remove_keys " << to_remove << " from " << *object << std::endl;
+
+    ghobject_t hoid(hobject_t(sobject_t(*object, CEPH_NOSNAP)));
+    db->rm_keys(hoid, to_remove);
+    ASSERT_TRUE(db->check(std::cerr));
+  }
+
   void auto_remove_xattr(ostream &out) {
     set<string>::iterator object = rand_choose(object_name_space);
     set<string> kspace;
@@ -747,19 +771,22 @@ TEST_F(ObjectMapTest, OddEvenClone) {
 
 TEST_F(ObjectMapTest, RandomTest) {
   tester.def_init();
-  for (unsigned i = 0; i < 5000; ++i) {
+  int seed = time(0);
+  std::cerr << "Seed is " << seed << std::endl;
+  srand(seed);
+  for (unsigned i = 0; i < 50000; ++i) {
     unsigned val = rand();
     val <<= 8;
-    val %= 100;
+    val %= 120;
     if (!(i%100))
       std::cout << "on op " << i
 		<< " val is " << val << std::endl;
 
-    if (val < 7) {
+    if (val < 2) {
       tester.auto_write_header(std::cerr);
-    } else if (val < 14) {
+    } else if (val < 3) {
       ASSERT_TRUE(tester.auto_verify_header(std::cerr));
-    } else if (val < 30) {
+    } else if (val < 40) {
       tester.auto_set_key(std::cerr);
     } else if (val < 42) {
       tester.auto_set_xattr(std::cerr);
@@ -771,16 +798,18 @@ TEST_F(ObjectMapTest, RandomTest) {
       ASSERT_TRUE(tester.auto_check_absent_key(std::cerr));
     } else if (val < 72) {
       ASSERT_TRUE(tester.auto_check_absent_xattr(std::cerr));
-    } else if (val < 73) {
-      tester.auto_clear_omap(std::cerr);
+      //    } else if (val < 73) {
+      //      tester.auto_clear_omap(std::cerr);
     } else if (val < 76) {
       tester.auto_delete_object(std::cerr);
-    } else if (val < 85) {
+    } else if (val < 90) {
       tester.auto_clone_key(std::cerr);
     } else if (val < 92) {
       tester.auto_remove_xattr(std::cerr);
-    } else {
+    } else if (val < 100) {
       tester.auto_remove_key(std::cerr);
+    } else {
+      tester.auto_remove_keys(std::cerr);
     }
   }
 }
