@@ -204,6 +204,7 @@ protected:
   SnapMapper snap_mapper;
 
   virtual PGBackend *get_pgbackend() = 0;
+  virtual const PGBackend* get_pgbackend() const = 0;
 public:
   std::string gen_prefix() const;
   CephContext *get_cct() const { return cct; }
@@ -214,7 +215,7 @@ public:
     snap_mapper.update_bits(bits);
   }
   /// get_is_recoverable_predicate: caller owns returned pointer and must delete when done
-  IsPGRecoverablePredicate *get_is_recoverable_predicate() {
+  IsPGRecoverablePredicate *get_is_recoverable_predicate() const {
     return get_pgbackend()->get_is_recoverable_predicate();
   }
 protected:

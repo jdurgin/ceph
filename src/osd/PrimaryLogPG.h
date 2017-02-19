@@ -242,6 +242,10 @@ public:
     return pgbackend.get();
   }
 
+  const PGBackend* get_pgbackend() const override {
+    return pgbackend.get();
+  }
+
   /// Listener methods
   DoutPrefixProvider *get_dpp() override {
     return this;

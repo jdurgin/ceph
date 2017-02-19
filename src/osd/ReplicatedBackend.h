@@ -76,7 +76,7 @@ public:
       return !have.empty();
     }
   };
-  IsPGRecoverablePredicate *get_is_recoverable_predicate() {
+  IsPGRecoverablePredicate *get_is_recoverable_predicate() const {
     return new RPCRecPred;
   }
 
@@ -88,7 +88,7 @@ public:
       return have.count(whoami);
     }
   };
-  IsPGReadablePredicate *get_is_readable_predicate() {
+  IsPGReadablePredicate *get_is_readable_predicate() const {
     return new RPCReadPred(get_parent()->whoami_shard());
   }
 
