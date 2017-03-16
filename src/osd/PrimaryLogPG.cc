@@ -577,9 +577,9 @@ bool PrimaryLogPG::is_degraded_or_backfilling_object(const hobject_t& soid)
     return true;
   if (pg_log.get_missing().get_items().count(soid))
     return true;
-  assert(!actingbackfill.empty());
-  for (set<pg_shard_t>::iterator i = actingbackfill.begin();
-       i != actingbackfill.end();
+  assert(!acting_recovery_backfill.empty());
+  for (set<pg_shard_t>::iterator i = acting_recovery_backfill.begin();
+       i != acting_recovery_backfill.end();
        ++i) {
     if (*i == get_primary()) continue;
     pg_shard_t peer = *i;
@@ -879,10 +879,10 @@ int PrimaryLogPG::do_command(
         f->dump_stream("shard") << *p;
       f->close_section();
     }
-    if (!actingbackfill.empty()) {
-      f->open_array_section("actingbackfill");
-      for (set<pg_shard_t>::iterator p = actingbackfill.begin();
-	   p != actingbackfill.end();
+    if (!acting_recovery_backfill.empty()) {
+      f->open_array_section("acting_recovery_backfill");
+      for (set<pg_shard_t>::iterator p = acting_recovery_backfill.begin();
+	   p != acting_recovery_backfill.end();
 	   ++p)
         f->dump_stream("shard") << *p;
       f->close_section();
@@ -8356,8 +8356,8 @@ void PrimaryLogPG::issue_repop(RepGather *repop, OpContext *ctx)
 
   repop->v = ctx->at_version;
   if (ctx->at_version > eversion_t()) {
-    for (set<pg_shard_t>::iterator i = actingbackfill.begin();
-	 i != actingbackfill.end();
+    for (set<pg_shard_t>::iterator i = acting_recovery_backfill.begin();
+	 i != acting_recovery_backfill.end();
 	 ++i) {
       if (*i == get_primary()) continue;
       pg_info_t &pinfo = peer_info[*i];
@@ -8539,8 +8539,8 @@ void PrimaryLogPG::submit_log_entries(
 
 
       set<pg_shard_t> waiting_on;
-      for (set<pg_shard_t>::const_iterator i = actingbackfill.begin();
-	   i != actingbackfill.end();
+      for (set<pg_shard_t>::const_iterator i = acting_recovery_backfill.begin();
+	   i != acting_recovery_backfill.end();
 	   ++i) {
 	pg_shard_t peer(*i);
 	if (peer == pg_whoami) continue;
@@ -9550,9 +9550,9 @@ eversion_t PrimaryLogPG::pick_newest_available(const hobject_t& oid)
   v = pmi.have;
   dout(10) << "pick_newest_available " << oid << " " << v << " on osd." << osd->whoami << " (local)" << dendl;
 
-  assert(!actingbackfill.empty());
-  for (set<pg_shard_t>::iterator i = actingbackfill.begin();
-       i != actingbackfill.end();
+  assert(!acting_recovery_backfill.empty());
+  for (set<pg_shard_t>::iterator i = acting_recovery_backfill.begin();
+       i != acting_recovery_backfill.end();
        ++i) {
     if (*i == get_primary()) continue;
     pg_shard_t peer = *i;
@@ -10540,9 +10540,9 @@ int PrimaryLogPG::prep_object_replica_pushes(
     pg_log.missing_add(soid, v, eversion_t());
     missing_loc.remove_location(soid, pg_whoami);
     bool uhoh = true;
-    assert(!actingbackfill.empty());
-    for (set<pg_shard_t>::iterator i = actingbackfill.begin();
-	 i != actingbackfill.end();
+    assert(!acting_recovery_backfill.empty());
+    for (set<pg_shard_t>::iterator i = acting_recovery_backfill.begin();
+	 i != acting_recovery_backfill.end();
 	 ++i) {
       if (*i == get_primary()) continue;
       pg_shard_t peer = *i;
@@ -10598,9 +10598,9 @@ uint64_t PrimaryLogPG::recover_replicas(uint64_t max, ThreadPool::TPHandle &hand
   PGBackend::RecoveryHandle *h = pgbackend->open_recovery_op();
 
   // this is FAR from an optimal recovery order.  pretty lame, really.
-  assert(!actingbackfill.empty());
-  for (set<pg_shard_t>::iterator i = actingbackfill.begin();
-       i != actingbackfill.end();
+  assert(!acting_recovery_backfill.empty());
+  for (set<pg_shard_t>::iterator i = acting_recovery_backfill.begin();
+       i != acting_recovery_backfill.end();
        ++i) {
     if (*i == get_primary()) continue;
     pg_shard_t peer = *i;

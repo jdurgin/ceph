@@ -700,8 +700,8 @@ void ECBackend::recover_object(
   }
   h->ops.back().recovery_progress.omap_complete = true;
   for (set<pg_shard_t>::const_iterator i =
-	 get_parent()->get_actingbackfill_shards().begin();
-       i != get_parent()->get_actingbackfill_shards().end();
+	 get_parent()->get_acting_recovery_backfill_shards().begin();
+       i != get_parent()->get_acting_recovery_backfill_shards().end();
        ++i) {
     dout(10) << "checking " << *i << dendl;
     if (get_parent()->get_shard_missing(*i).is_missing(hoid)) {
@@ -1827,8 +1827,8 @@ bool ECBackend::try_reads_to_commit()
 
   map<shard_id_t, ObjectStore::Transaction> trans;
   for (set<pg_shard_t>::const_iterator i =
-	 get_parent()->get_actingbackfill_shards().begin();
-       i != get_parent()->get_actingbackfill_shards().end();
+	 get_parent()->get_acting_recovery_backfill_shards().begin();
+       i != get_parent()->get_acting_recovery_backfill_shards().end();
        ++i) {
     trans[i->shard];
   }
@@ -1885,8 +1885,8 @@ bool ECBackend::try_reads_to_commit()
   bool should_write_local = false;
   ECSubWrite local_write_op;
   for (set<pg_shard_t>::const_iterator i =
-	 get_parent()->get_actingbackfill_shards().begin();
-       i != get_parent()->get_actingbackfill_shards().end();
+	 get_parent()->get_acting_recovery_backfill_shards().begin();
+       i != get_parent()->get_acting_recovery_backfill_shards().end();
        ++i) {
     op->pending_apply.insert(*i);
     op->pending_commit.insert(*i);

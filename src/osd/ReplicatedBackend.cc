@@ -574,11 +574,11 @@ void ReplicatedBackend::submit_transaction(
     ).first->second;
 
   op.waiting_for_applied.insert(
-    parent->get_actingbackfill_shards().begin(),
-    parent->get_actingbackfill_shards().end());
+    parent->get_acting_recovery_backfill_shards().begin(),
+    parent->get_acting_recovery_backfill_shards().end());
   op.waiting_for_commit.insert(
-    parent->get_actingbackfill_shards().begin(),
-    parent->get_actingbackfill_shards().end());
+    parent->get_acting_recovery_backfill_shards().begin(),
+    parent->get_acting_recovery_backfill_shards().end());
 
   issue_op(
     soid,
@@ -1048,17 +1048,17 @@ void ReplicatedBackend::issue_op(
   ObjectStore::Transaction &op_t)
 {
 
-  if (parent->get_actingbackfill_shards().size() > 1) {
+  if (parent->get_acting_recovery_backfill_shards().size() > 1) {
     ostringstream ss;
-    set<pg_shard_t> replicas = parent->get_actingbackfill_shards();
+    set<pg_shard_t> replicas = parent->get_acting_recovery_backfill_shards();
     replicas.erase(parent->whoami_shard());
     ss << "waiting for subops from " << replicas;
     if (op->op)
       op->op->mark_sub_op_sent(ss.str());
   }
   for (set<pg_shard_t>::const_iterator i =
-	 parent->get_actingbackfill_shards().begin();
-       i != parent->get_actingbackfill_shards().end();
+	 parent->get_acting_recovery_backfill_shards().begin();
+       i != parent->get_acting_recovery_backfill_shards().end();
        ++i) {
     if (*i == parent->whoami_shard()) continue;
     pg_shard_t peer = *i;
@@ -2436,10 +2436,10 @@ int ReplicatedBackend::start_pushes(
 {
   int pushes = 0;
   // who needs it?
-  assert(get_parent()->get_actingbackfill_shards().size() > 0);
+  assert(get_parent()->get_acting_recovery_backfill_shards().size() > 0);
   for (set<pg_shard_t>::iterator i =
-	 get_parent()->get_actingbackfill_shards().begin();
-       i != get_parent()->get_actingbackfill_shards().end();
+	 get_parent()->get_acting_recovery_backfill_shards().begin();
+       i != get_parent()->get_acting_recovery_backfill_shards().end();
        ++i) {
     if (*i == get_parent()->whoami_shard()) continue;
     pg_shard_t peer = *i;

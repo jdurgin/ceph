@@ -133,7 +133,7 @@ typedef ceph::shared_ptr<const OSDMap> OSDMapRef;
        ) = 0;
      virtual epoch_t get_epoch() const = 0;
 
-     virtual const set<pg_shard_t> &get_actingbackfill_shards() const = 0;
+     virtual const set<pg_shard_t> &get_acting_recovery_backfill_shards() const = 0;
      virtual const set<pg_shard_t> &get_acting_shards() const = 0;
      virtual const set<pg_shard_t> &get_backfill_shards() const = 0;
 
