@@ -583,6 +583,10 @@ bool PrimaryLogPG::is_degraded_or_backfilling_object(const hobject_t& soid)
        ++i) {
     if (*i == get_primary()) continue;
     pg_shard_t peer = *i;
+    if (async_recovery_targets.find(peer) != async_recovery_targets.end()) {
+      // TODO: change is_missing() to only check acting set missing
+      continue;
+    }
     auto peer_missing_entry = peer_missing.find(peer);
     if (peer_missing_entry != peer_missing.end() &&
 	peer_missing_entry->second.get_items().count(soid))
