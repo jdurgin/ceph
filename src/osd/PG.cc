@@ -1520,12 +1520,12 @@ bool PG::choose_acting(pg_shard_t &auth_log_shard_id,
     return false;
   }
 
-  set<pg_shard_t> want_async_recover;
+  set<pg_shard_t> want_async_recovery;
   if (get_osdmap()->test_flag(CEPH_OSDMAP_REQUIRE_LUMINOUS)) {
     if (pool.info.ec_pool()) {
-      choose_async_recovery_ec(all_info, auth_log_shard->second, &want, &want_async_recover);
+      choose_async_recovery_ec(all_info, auth_log_shard->second, &want, &want_async_recovery);
     } else {
-      choose_async_recovery_replicated(all_info, auth_log_shard->second, &want, &want_async_recover);
+      choose_async_recovery_replicated(all_info, auth_log_shard->second, &want, &want_async_recovery);
     }
   }
 
@@ -1552,6 +1552,10 @@ bool PG::choose_acting(pg_shard_t &auth_log_shard_id,
     // Caller is GetInfo
     backfill_targets = want_backfill;
   }
+  assert(async_recovery_targets.empty() || async_recovery_targets == want_async_recovery);
+  if (async_recovery_targets.empty()) {
+    async_recovery_targets = want_async_recovery;
+  }
   // Will not change if already set because up would have had to change
   // Verify that nothing in backfill is in stray_set
   for (set<pg_shard_t>::iterator i = want_backfill.begin();
@@ -1560,7 +1564,8 @@ bool PG::choose_acting(pg_shard_t &auth_log_shard_id,
     assert(stray_set.find(*i) == stray_set.end());
   }
   dout(10) << "choose_acting want " << want << " (== acting) backfill_targets " 
-	   << want_backfill << dendl;
+	   << want_backfill << " async_recovery_targets "
+	   << async_recovery_targets << dendl;
   return true;
 }
 
@@ -2490,6 +2495,7 @@ void PG::clear_recovery_state()
     finish_recovery_op(soid, true);
   }
 
+  async_recovery_targets.clear();
   backfill_targets.clear();
   backfill_info.clear();
   peer_backfill_info.clear();
