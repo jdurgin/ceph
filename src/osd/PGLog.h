@@ -82,6 +82,7 @@ public:
     mutable ceph::unordered_map<hobject_t,pg_log_entry_t*> objects;  // ptrs into log.  be careful!
     mutable ceph::unordered_map<osd_reqid_t,pg_log_entry_t*> caller_ops;
     mutable ceph::unordered_multimap<osd_reqid_t,pg_log_entry_t*> extra_caller_ops;
+    mutable ceph::unordered_map<osd_reqid_t, pg_log_dup_t*> dup_index;
 
     // recovery pointers
     list<pg_log_entry_t>::iterator complete_to; // not inclusive of referenced item
@@ -401,6 +402,7 @@ public:
       objects.clear();
       caller_ops.clear();
       extra_caller_ops.clear();
+      dup_index.clear();
       indexed_data = 0;
     }
     void unindex(pg_log_entry_t& e) {
@@ -478,7 +480,8 @@ public:
     void trim(
       CephContext* cct,
       eversion_t s,
-      set<eversion_t> *trimmed);
+      set<eversion_t> *trimmed,
+      set<string> *trimmed_dups);
 
     ostream& print(ostream& out) const;
   };
@@ -494,11 +497,13 @@ protected:
   eversion_t dirty_from;       ///< must clear/writeout all keys >= dirty_from
   eversion_t writeout_from;    ///< must writout keys >= writeout_from
   set<eversion_t> trimmed;     ///< must clear keys in trimmed
+  set<string> trimmed_dups; ///< must clear keys in trimmed_dups
   CephContext *cct;
   bool pg_log_debug;
   /// Log is clean on [dirty_to, dirty_from)
   bool touched_log;
   bool clear_divergent_priors;
+  bool dirty_dups; /// log.dups is updated
 
   void mark_dirty_to(eversion_t to) {
     if (to > dirty_to)
@@ -519,6 +524,7 @@ public:
       (dirty_from != eversion_t::max()) ||
       (writeout_from != eversion_t::max()) ||
       !(trimmed.empty()) ||
+      !(trimmed_dups.empty()) ||
       !missing.is_clean();
   }
   void mark_log_for_rewrite() {
@@ -551,9 +557,11 @@ protected:
     dirty_from = eversion_t::max();
     touched_log = true;
     trimmed.clear();
+    trimmed_dups.clear();
     writeout_from = eversion_t::max();
     check();
     missing.flush();
+    dirty_dups = false;
   }
 public:
   // cppcheck-suppress noExplicitConstructor
@@ -1071,6 +1079,7 @@ public:
     eversion_t dirty_from,
     eversion_t writeout_from,
     const set<eversion_t> &trimmed,
+    const set<string> &trimmed_dups,
     bool dirty_divergent_priors,
     bool touch_log,
     bool require_rollback,
@@ -1086,6 +1095,7 @@ public:
     eversion_t dirty_from,
     eversion_t writeout_from,
     const set<eversion_t> &trimmed,
+    const set<string> &trimmed_dups,
     const pg_missing_tracker_t &missing,
     bool touch_log,
     bool require_rollback,
@@ -1136,6 +1146,7 @@ public:
     map<eversion_t, hobject_t> divergent_priors;
     bool has_divergent_priors = false;
     list<pg_log_entry_t> entries;
+    list<pg_log_dup_t> dups;
     if (p) {
       for (p->seek_to_first(); p->valid() ; p->next(false)) {
 	// non-log pgmeta_oid keys are prefixed with _; skip those
@@ -1157,6 +1168,13 @@ public:
 	  pair<hobject_t, pg_missing_item> p;
 	  ::decode(p, bp);
 	  missing.add(p.first, p.second.need, p.second.have);
+	} else if (p->key().substr(0, 4) == string("dup_")) {
+	  pg_log_dup_t dup;
+	  ::decode(dup, bp);
+	  if (!dups.empty()) {
+	    assert(dups.back().version < dup.version);
+	  }
+	  dups.push_back(dup);
 	} else {
 	  pg_log_entry_t e;
 	  e.decode_with_checksum(bp);
@@ -1177,7 +1195,8 @@ public:
       info.log_tail,
       on_disk_can_rollback_to,
       on_disk_rollback_info_trimmed_to,
-      std::move(entries));
+      std::move(entries),
+      std::move(dups));
 
     if (has_divergent_priors || debug_verify_stored_missing) {
       // build missing
