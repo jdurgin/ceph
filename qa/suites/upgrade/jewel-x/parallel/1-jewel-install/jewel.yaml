@@ -5,7 +5,7 @@ meta:
    upgrade the client node
 tasks:
 - install:
-    branch: jewel
+    branch: wip-dup-ops-jewel-deb
     exclude_packages: ['ceph-mgr','libcephfs2','libcephfs-devel','libcephfs-dev']
 - print: "**** done installing jewel"
 - ceph:
