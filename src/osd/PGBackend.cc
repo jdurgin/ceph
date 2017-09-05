@@ -112,6 +112,7 @@ void PGBackend::handle_recovery_delete(OpRequestRef op)
 {
   const MOSDPGRecoveryDelete *m = static_cast<const MOSDPGRecoveryDelete *>(op->get_req());
   assert(m->get_type() == MSG_OSD_PG_RECOVERY_DELETE);
+  m->finish_decode(get_osdmap()->get_up_osd_features());
   dout(20) << __func__ << " " << op << dendl;
 
   op->mark_started();
@@ -144,6 +145,7 @@ void PGBackend::handle_recovery_delete_reply(OpRequestRef op)
 {
   const MOSDPGRecoveryDeleteReply *m = static_cast<const MOSDPGRecoveryDeleteReply *>(op->get_req());
   assert(m->get_type() == MSG_OSD_PG_RECOVERY_DELETE_REPLY);
+  m->finish_decode(get_osdmap()->get_up_osd_features());
   dout(20) << __func__ << " " << op << dendl;
 
   for (const auto &p : m->objects) {
