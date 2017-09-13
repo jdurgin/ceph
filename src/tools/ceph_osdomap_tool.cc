@@ -27,7 +27,7 @@ using namespace std;
 
 int main(int argc, char **argv) {
   po::options_description desc("Allowed options");
-  string store_path, cmd, out_path;
+  string store_path, cmd, oid, backend;
   desc.add_options()
     ("help", "produce help message")
     ("omap-path", po::value<string>(&store_path),
@@ -35,6 +35,8 @@ int main(int argc, char **argv) {
     ("paranoid", "use paranoid checking")
     ("command", po::value<string>(&cmd),
      "command arg is one of [dump-raw-keys, dump-raw-key-vals, dump-objects, dump-objects-with-keys, check], mandatory")
+    ("backend", po::value<string>(&backend),
+     "DB backend (default rocksdb)")
     ;
   po::positional_options_description p;
   p.add("command", 1);
@@ -86,7 +88,15 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  KeyValueDB* store(KeyValueDB::create(g_ceph_context, "leveldb", store_path));
+  if (vm.count("backend") == 0) {
+    backend = "rocksdb";
+  }
+
+  KeyValueDB* store(KeyValueDB::create(g_ceph_context, backend, store_path));
+  if (store == NULL) {
+    std::cerr << "Invalid backend '" << backend << "' specified" << std::endl;
+    return 1;
+  }
   /*if (vm.count("paranoid")) {
     std::cerr << "Enabling paranoid checks" << std::endl;
     store->options.paranoid_checks = true;
