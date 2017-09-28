@@ -550,6 +550,33 @@ endif
 endif # WITH_RBD
 
 
+if WITH_RADOSSTRIPER
+libradosstripertest_la_SOURCES = test/libradosstriper/TestCase.cc
+noinst_LTLIBRARIES += libradosstripertest.la
+libradosstripertest_la_LIBADD = $(RADOS_TEST_LDADD)
+libradosstripertest_la_CXXFLAGS = $(UNITTEST_CXXFLAGS)
+RADOS_STRIPER_TEST_LDADD = libradosstripertest.la
+
+ceph_test_rados_striper_api_io_SOURCES = test/libradosstriper/io.cc
+ceph_test_rados_striper_api_io_LDADD = \
+	$(LIBRADOS) $(LIBRADOSSTRIPER) $(LIBCOMMON) \
+	$(UNITTEST_LDADD) $(RADOS_STRIPER_TEST_LDADD)
+ceph_test_rados_striper_api_io_CXXFLAGS = $(UNITTEST_CXXFLAGS)
+bin_DEBUGPROGRAMS += ceph_test_rados_striper_api_io
+
+ceph_test_rados_striper_api_aio_SOURCES = test/libradosstriper/aio.cc
+ceph_test_rados_striper_api_aio_LDADD = $(LIBRADOS) $(LIBRADOSSTRIPER) $(UNITTEST_LDADD) $(RADOS_STRIPER_TEST_LDADD)
+ceph_test_rados_striper_api_aio_CXXFLAGS = $(UNITTEST_CXXFLAGS)
+bin_DEBUGPROGRAMS += ceph_test_rados_striper_api_aio
+
+ceph_test_rados_striper_api_striping_SOURCES = test/libradosstriper/striping.cc
+ceph_test_rados_striper_api_striping_LDADD = $(LIBRADOS) $(LIBRADOSSTRIPER) $(UNITTEST_LDADD) $(RADOS_STRIPER_TEST_LDADD)
+ceph_test_rados_striper_api_striping_CXXFLAGS = $(UNITTEST_CXXFLAGS)
+bin_DEBUGPROGRAMS += ceph_test_rados_striper_api_striping
+
+endif # WITH_RADOSSTRIPER
+
+
 if WITH_CEPHFS
 
 if WITH_BUILD_TESTS

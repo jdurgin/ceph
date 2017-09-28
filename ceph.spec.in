@@ -407,6 +407,27 @@ Obsoletes:	python-ceph < %{epoch}:%{version}-%{release}
 This package contains Python libraries for interacting with Cephs RADOS
 object store.
 
+%package -n libradosstriper1
+Summary:	RADOS striping interface
+Group:		System Environment/Libraries
+License:	LGPL-2.0
+Requires:	librados2 = %{epoch}:%{version}-%{release}
+%description -n libradosstriper1
+Striping interface built on top of the rados library, allowing
+to stripe bigger objects onto several standard rados objects using
+an interface very similar to the rados one.
+
+%package -n libradosstriper1-devel
+Summary:	RADOS striping interface headers
+Group:		Development/Libraries
+License:	LGPL-2.0
+Requires:	libradosstriper1 = %{epoch}:%{version}-%{release}
+Requires:	librados2-devel = %{epoch}:%{version}-%{release}
+Obsoletes:	ceph-devel < %{epoch}:%{version}-%{release}
+%description -n libradosstriper1-devel
+This package contains libraries and headers needed to develop programs
+that use RADOS striping interface.
+
 %package -n librbd1
 Summary:	RADOS block device client library
 Group:		System Environment/Libraries
@@ -567,6 +588,7 @@ Group:		Development/Libraries
 License:	LGPL-2.0
 Obsoletes:	ceph-devel
 Requires:	librados2-devel = %{epoch}:%{version}-%{release}
+Requires:	libradosstriper1-devel = %{epoch}:%{version}-%{release}
 Requires:	librbd1-devel = %{epoch}:%{version}-%{release}
 Requires:	libcephfs1-devel = %{epoch}:%{version}-%{release}
 %if 0%{with cephfs_java}
@@ -577,7 +599,7 @@ Provides:	ceph-devel
 This is a compatibility package to accommodate ceph-devel split into
 librados2-devel, librbd1-devel and libcephfs1-devel. Packages still depending
 on ceph-devel should be fixed to depend on librados2-devel, librbd1-devel,
-or libcephfs1-devel instead.
+libcephfs1-devel or libradosstriper1-devel instead.
 
 %package -n python-ceph-compat
 Summary:	Compatibility package for Cephs python libraries
@@ -1240,6 +1262,25 @@ fi
 %defattr(-,root,root,-)
 %{python_sitearch}/rados.so
 %{python_sitearch}/rados-*.egg-info
+
+#################################################################################
+%files -n libradosstriper1
+%defattr(-,root,root,-)
+%{_libdir}/libradosstriper.so.*
+
+%post -n libradosstriper1
+/sbin/ldconfig
+
+%postun -n libradosstriper1
+/sbin/ldconfig
+
+#################################################################################
+%files -n libradosstriper1-devel
+%defattr(-,root,root,-)
+%dir %{_includedir}/radosstriper
+%{_includedir}/radosstriper/libradosstriper.h
+%{_includedir}/radosstriper/libradosstriper.hpp
+%{_libdir}/libradosstriper.so
 
 #################################################################################
 %files -n librbd1

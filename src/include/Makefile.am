@@ -28,6 +28,15 @@ librbd_include_DATA = \
 	$(srcdir)/include/rbd/librbd.hpp
 endif # WITH_RBD
 
+
+if WITH_RADOSSTRIPER
+radosstriper_includedir = $(includedir)/radosstriper
+radosstriper_include_DATA = \
+	$(srcdir)/include/radosstriper/libradosstriper.h \
+	$(srcdir)/include/radosstriper/libradosstriper.hpp
+endif # WITH_RADOSSTRIPER
+
+
 if WITH_CEPHFS
 libcephfs_includedir = $(includedir)/cephfs
 libcephfs_include_DATA = $(srcdir)/include/cephfs/libcephfs.h
@@ -108,6 +117,8 @@ noinst_HEADERS += \
 	include/rados/buffer.h \
 	include/rados/buffer_fwd.h \
 	include/rados/rgw_file.h \
+	include/radosstriper/libradosstriper.h \
+	include/radosstriper/libradosstriper.hpp \
 	include/rbd/features.h \
 	include/rbd/librbd.h \
 	include/rbd/librbd.hpp\
