@@ -12,7 +12,7 @@ function test_log_size()
 }
 
 ceph osd pool rm test test --yes-i-really-really-mean-it
-ceph osd pool create test 1 1 || true
+ceph osd pool create test 1 1
 POOL_ID=$(ceph osd dump --format json | jq '.pools[] | select(.pool_name == "test") | .pool')
 PGID="${POOL_ID}.0"
 
@@ -37,9 +37,5 @@ do
     rados -p test rm foo || true
 done
 
-# this demonstrates the problem - it should fail
-test_log_size $PGID 41
-
-# regular write should trim the log
-rados -p test put foo foo
-test_log_size $PGID 22
+# log should have just trimmed
+test_log_size $PGID 11
