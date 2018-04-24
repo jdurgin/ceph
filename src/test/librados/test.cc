@@ -420,3 +420,10 @@ void assert_eq_sparse(bufferlist& expected,
   }
   ASSERT_EQ(expected.length(), pos);
 }
+
+int set_allow_ec_overwrites(const std::string &pool_name, librados::Rados &cluster) {
+  bufferlist inbl;
+  return cluster.mon_command(
+    "{\"prefix\": \"osd pool set\", \"pool\": \"" + pool_name + "\", \"var\":\"allow_ec_overwrites\", \"val\":\"true\", }",
+    inbl, NULL, NULL);
+}

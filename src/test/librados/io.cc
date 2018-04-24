@@ -21,6 +21,7 @@ typedef RadosTest LibRadosIo;
 typedef RadosTestEC LibRadosIoEC;
 typedef RadosTestPP LibRadosIoPP;
 typedef RadosTestECPP LibRadosIoECPP;
+typedef RadosTestECPP LibRadosIoECOverwrites;
 
 TEST_F(LibRadosIo, SimpleWrite) {
   char buf[128];
@@ -1322,4 +1323,40 @@ TEST_F(LibRadosIoECPP, CmpExtMismatchPP) {
   read.read(0, bl.length(), NULL, NULL);
   ASSERT_EQ(0, ioctx.operate("foo", &read, &bl));
   ASSERT_EQ(0, memcmp(bl.c_str(), "ceph", 4));
+}
+
+TEST_F(LibRadosIoECOverwrites, TruncateRead) {
+  int r = set_allow_ec_overwrites(pool_name, cluster);
+  if (r == -EINVAL) {
+    std::cerr << "skipping EC overwrites test, assuming cluster is not all bluestore" << std::endl;
+    return;
+  }
+  ASSERT_EQ(0, r);
+
+  int bsize = alignment;
+  int dbsize = bsize * 2;
+  char *buf = (char *)new char[dbsize];
+  auto cleanup = [&] {
+    delete[] buf;
+  };
+  scope_guard<decltype(cleanup)> sg(std::move(cleanup));
+  memset(buf, 0xcc, dbsize);
+  bufferlist bl, read_bl;
+  bl.append(buf, dbsize);
+  ASSERT_EQ(0, ioctx.write("foo", bl, dbsize, 0));
+  ASSERT_EQ(dbsize, ioctx.read("foo", read_bl, dbsize, 0));
+  ASSERT_EQ(0, memcmp(read_bl.c_str(), buf, dbsize));
+
+  int len = dbsize - dbsize / 3;
+  int offset = dbsize / 3;
+  memset(buf + offset, 0, len);
+  ASSERT_EQ(0, ioctx.trunc("foo", offset));
+  read_bl.clear();
+  ASSERT_EQ(offset, ioctx.read("foo", read_bl, dbsize, 0));
+  ASSERT_EQ(0, memcmp(read_bl.c_str(), buf, offset));
+
+  ASSERT_EQ(0, ioctx.trunc("foo", dbsize));
+  read_bl.clear();
+  ASSERT_EQ(dbsize, ioctx.read("foo", read_bl, dbsize, 0));
+  ASSERT_EQ(0, memcmp(read_bl.c_str(), buf, dbsize));
 }

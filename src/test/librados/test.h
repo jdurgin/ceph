@@ -45,6 +45,7 @@ int destroy_one_ec_pool_pp(const std::string &pool_name, librados::Rados &cluste
 void assert_eq_sparse(bufferlist& expected,
                       const std::map<uint64_t, uint64_t>& extents,
                       bufferlist& actual);
+int set_allow_ec_overwrites(const std::string &pool_name, librados::Rados &cluster);
 
 class TestAlarm
 {
