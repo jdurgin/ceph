@@ -104,6 +104,11 @@ public:
 
   int wait_for_latest_osdmap();
 
+  // just for testing
+  Objecter *get_objecter() {
+    return objecter;
+  }
+
   int create_ioctx(const char *name, IoCtxImpl **io);
   int create_ioctx(int64_t, IoCtxImpl **io);
 
