@@ -114,7 +114,8 @@ void rbd_bencher_completion(void *vc, void *pc)
   c->release();
 }
 
-int do_bench_write(librbd::Image& image, uint64_t io_size,
+int do_bench_write(librbd::Image& image, uint64_t aligned_size,
+		   uint64_t io_size,
                    uint64_t io_threads, uint64_t io_bytes,
                    bool random)
 {
@@ -191,8 +192,8 @@ int do_bench_write(librbd::Image& image, uint64_t io_size,
       if (random) {
         thread_offset[i] = (rand() % (size / io_size)) * io_size;
       } else {
-        thread_offset[i] += io_size;
-        if (thread_offset[i] + io_size > size)
+        thread_offset[i] += aligned_size;
+        if (thread_offset[i] + aligned_size > size)
           thread_offset[i] = 0;
       }
 
@@ -249,6 +250,7 @@ void get_arguments(po::options_description *positional,
   // TODO
   options->add_options()
     ("io-size", po::value<Size>(), "write size (in B/K/M/G/T)")
+    ("aligned-size", po::value<Size>(), "aligned write size (in B/K/M/G/T)")
     ("io-threads", po::value<uint32_t>(), "ios in flight")
     ("io-total", po::value<Size>(), "total size to write (in B/K/M/G/T)")
     ("io-pattern", po::value<IOPattern>(), "write pattern (rand or seq)");
@@ -271,6 +273,13 @@ int execute(const po::variables_map &vm) {
     bench_io_size = vm["io-size"].as<uint64_t>();
   } else {
     bench_io_size = 4096;
+  }
+
+  uint64_t bench_aligned_size;
+  if (vm.count("aligned-size")) {
+    bench_aligned_size = vm["aligned-size"].as<uint64_t>();
+  } else {
+    bench_aligned_size = bench_io_size;
   }
 
   uint32_t bench_io_threads;
@@ -303,7 +312,8 @@ int execute(const po::variables_map &vm) {
     return r;
   }
 
-  r = do_bench_write(image, bench_io_size, bench_io_threads, bench_bytes,
+  r = do_bench_write(image, bench_aligned_size, bench_io_size,
+		     bench_io_threads, bench_bytes,
                      bench_random);
   if (r < 0) {
     std::cerr << "bench-write failed: " << cpp_strerror(r) << std::endl;
