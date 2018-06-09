@@ -2263,12 +2263,12 @@ int main(int argc, char **argv)
     ("journal-path", po::value<string>(&jpath),
      "path to journal, mandatory for filestore type")
     ("pgid", po::value<string>(&pgidstr),
-     "PG id, mandatory for info, log, remove, export, rm-past-intervals, mark-complete, and mandatory for apply-layout-settings if --pool is not specified")
+     "PG id, mandatory for info, log, remove, export, rm-past-intervals, mark-complete, rm-hit-set-index and mandatory for apply-layout-settings if --pool is not specified")
     ("pool", po::value<string>(&pool),
      "Pool name, mandatory for apply-layout-settings if --pgid is not specified")
     ("op", po::value<string>(&op),
      "Arg is one of [info, log, remove, mkfs, fsck, fuse, export, import, list, fix-lost, list-pgs, rm-past-intervals, dump-journal, dump-super, meta-list, "
-     "get-osdmap, set-osdmap, get-inc-osdmap, set-inc-osdmap, mark-complete, apply-layout-settings, update-mon-db]")
+     "get-osdmap, set-osdmap, get-inc-osdmap, set-inc-osdmap, mark-complete, apply-layout-settings, update-mon-db, rm-hit-set-index]")
     ("epoch", po::value<unsigned>(&epoch),
      "epoch# for get-osdmap and get-inc-osdmap, the current epoch in use if not specified")
     ("file", po::value<string>(&file),
@@ -2690,6 +2690,7 @@ int main(int argc, char **argv)
   // The ops which require --pgid option are checked here and
   // mentioned in the usage for --pgid.
   if ((op == "info" || op == "log" || op == "remove" || op == "export"
+       || op == "rm-hit-set-index"
       || op == "rm-past-intervals" || op == "mark-complete") &&
       pgidstr.length() == 0) {
     cerr << "Must provide pgid" << std::endl;
@@ -2886,9 +2887,9 @@ int main(int argc, char **argv)
 
   // If not an object command nor any of the ops handled below, then output this usage
   // before complaining about a bad pgid
-  if (!vm.count("objcmd") && op != "export" && op != "info" && op != "log" && op != "rm-past-intervals" && op != "mark-complete") {
+  if (!vm.count("objcmd") && op != "export" && op != "info" && op != "log" && op != "rm-past-intervals" && op != "mark-complete" && op != "rm-hit-set-index") {
     cerr << "Must provide --op (info, log, remove, mkfs, fsck, export, import, list, fix-lost, list-pgs, rm-past-intervals, dump-journal, dump-super, meta-list, "
-      "get-osdmap, set-osdmap, get-inc-osdmap, set-inc-osdmap, mark-complete)"
+      "get-osdmap, set-osdmap, get-inc-osdmap, set-inc-osdmap, mark-complete, rm-hit-set-index)"
 	 << std::endl;
     usage(desc);
     ret = 1;
@@ -3193,6 +3194,30 @@ int main(int argc, char **argv)
       cout << "Remove past-intervals " << past_intervals << std::endl;
 
       past_intervals.clear();
+      if (dry_run) {
+        ret = 0;
+        goto out;
+      }
+      ret = write_info(*t, map_epoch, info, past_intervals);
+
+      if (ret == 0) {
+        fs->apply_transaction(osr, std::move(*t));
+        cout << "Removal succeeded" << std::endl;
+      }
+    } else if (op == "rm-hit-set-index") {
+      ObjectStore::Transaction tran;
+      ObjectStore::Transaction *t = &tran;
+      if (struct_ver != PG::cur_struct_v) {
+        cerr << "Can't remove hit set index, version mismatch " << (int)struct_ver
+          << " (pg)  != " << (int)PG::cur_struct_v << " (tool)"
+          << std::endl;
+        ret = -EFAULT;
+        goto out;
+      }
+
+      cout << "Remove " << info.hit_set.history.size() << " hitset entries " << std::endl;
+
+      info.hit_set = pg_hit_set_history_t();
       if (dry_run) {
         ret = 0;
         goto out;
