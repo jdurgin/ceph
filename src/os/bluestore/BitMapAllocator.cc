@@ -168,6 +168,11 @@ void BitMapAllocator::dump()
   m_bit_alloc->dump();
 }
 
+void BitMapAllocator::dump(std::function<void(uint64_t offset, uint64_t length)> notify)
+{
+  return;
+}
+
 void BitMapAllocator::init_add_free(uint64_t offset, uint64_t length)
 {
   dout(10) << __func__ << " instance " << (uint64_t) this

@@ -55,6 +55,7 @@ public:
   uint64_t get_free() override;
 
   void dump() override;
+  void dump(std::function<void(uint64_t offset, uint64_t length)> notify) override;
 
   void init_add_free(uint64_t offset, uint64_t length) override;
   void init_rm_free(uint64_t offset, uint64_t length) override;
