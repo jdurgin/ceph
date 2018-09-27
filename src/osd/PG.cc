@@ -3337,9 +3337,17 @@ int PG::read_info(
 
     p = values[biginfo_key].begin();
     if (struct_v >= 10) {
-      ::decode(past_intervals, p);
+      try {
+	::decode(past_intervals, p);
+      } catch (...) {
+	past_intervals.decode_classic(p);
+      }
     } else {
-      past_intervals.decode_classic(p);
+      try {
+	past_intervals.decode_classic(p);
+      } catch (...) {
+	::decode(past_intervals, p);
+      }
     }
     ::decode(info.purged_snaps, p);
 
