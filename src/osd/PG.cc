@@ -3380,7 +3380,7 @@ int PG::read_info(
   ::decode(info, p);
 
   p = values[bk].begin();
-  ::decode(past_intervals, p);
+  past_intervals.decode_classic(p);
   interval_set<snapid_t> snap_collections;  // obsolete
   ::decode(snap_collections, p);
   ::decode(info.purged_snaps, p);
