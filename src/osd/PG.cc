@@ -3340,12 +3340,14 @@ int PG::read_info(
       try {
 	::decode(past_intervals, p);
       } catch (...) {
+	p = values[biginfo_key].begin();
 	past_intervals.decode_classic(p);
       }
     } else {
       try {
 	past_intervals.decode_classic(p);
       } catch (...) {
+	p = values[biginfo_key].begin();
 	::decode(past_intervals, p);
       }
     }
