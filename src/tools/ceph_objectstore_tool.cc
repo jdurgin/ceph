@@ -3934,7 +3934,7 @@ int main(int argc, char **argv)
     PastIntervals past_intervals;
     __u8 struct_ver;
     ret = PG::read_info(fs, pgid, coll, bl, info, past_intervals,
-		      struct_ver);
+			struct_ver, cct->_conf->get_val<bool>("osd_ignore_ondisk_past_intervals"));
     if (ret < 0) {
       cerr << "read_info error " << cpp_strerror(ret) << std::endl;
       goto out;
