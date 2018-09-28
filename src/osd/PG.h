@@ -2559,7 +2559,7 @@ public:
   static int read_info(
     ObjectStore *store, spg_t pgid, const coll_t &coll,
     bufferlist &bl, pg_info_t &info, PastIntervals &past_intervals,
-    __u8 &);
+    __u8 &struct_v, bool ignore_ondisk_past_intervals=false);
   void read_state(ObjectStore *store, bufferlist &bl);
   static bool _has_removal_flag(ObjectStore *store, spg_t pgid);
   static int peek_map_epoch(ObjectStore *store, spg_t pgid,

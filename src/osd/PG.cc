@@ -3313,7 +3313,7 @@ std::string PG::get_corrupt_pg_log_name() const
 int PG::read_info(
   ObjectStore *store, spg_t pgid, const coll_t &coll, bufferlist &bl,
   pg_info_t &info, PastIntervals &past_intervals,
-  __u8 &struct_v)
+  __u8 &struct_v, bool ignore_ondisk_past_intervals)
 {
   // try for v8 or later
   set<string> keys;
@@ -3335,23 +3335,25 @@ int PG::read_info(
     p = values[info_key].begin();
     ::decode(info, p);
 
-    p = values[biginfo_key].begin();
-    if (struct_v >= 10) {
-      try {
-	::decode(past_intervals, p);
-      } catch (...) {
-	p = values[biginfo_key].begin();
-	past_intervals.decode_classic(p);
+    if (!ignore_ondisk_past_intervals) {
+      p = values[biginfo_key].begin();
+      if (struct_v >= 10) {
+	try {
+	  ::decode(past_intervals, p);
+	} catch (...) {
+	  p = values[biginfo_key].begin();
+	  past_intervals.decode_classic(p);
+	}
+      } else {
+	try {
+	  past_intervals.decode_classic(p);
+	} catch (...) {
+	  p = values[biginfo_key].begin();
+	  ::decode(past_intervals, p);
+	}
       }
-    } else {
-      try {
-	past_intervals.decode_classic(p);
-      } catch (...) {
-	p = values[biginfo_key].begin();
-	::decode(past_intervals, p);
-      }
+      ::decode(info.purged_snaps, p);
     }
-    ::decode(info.purged_snaps, p);
 
     p = values[fastinfo_key].begin();
     if (!p.end()) {
@@ -3392,7 +3394,7 @@ int PG::read_info(
 void PG::read_state(ObjectStore *store, bufferlist &bl)
 {
   int r = read_info(store, pg_id, coll, bl, info, past_intervals,
-		    info_struct_v);
+		    info_struct_v, cct->_conf->get_val<bool>("osd_ignore_ondisk_past_intervals"));
   assert(r >= 0);
 
   last_written_info = info;
