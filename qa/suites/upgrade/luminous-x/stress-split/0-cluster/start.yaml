@@ -15,9 +15,6 @@ overrides:
         enable experimental unrecoverable data corrupting features: "*"
       mon:
         mon warn on osd down out interval zero: false
-      osd:
-        osd min pg log entries: 1
-        osd max pg log entries: 2
 roles:
 - - mon.a
   - mon.b
