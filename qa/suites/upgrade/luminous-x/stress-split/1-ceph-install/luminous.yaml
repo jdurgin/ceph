@@ -2,7 +2,7 @@ meta:
 - desc: install ceph/luminous latest
 tasks:
 - install:
-    branch: luminous
+    tag: v12.2.5
 - print: "**** done install luminous"
 - ceph:
 - exec:
