@@ -57,7 +57,8 @@ void RGWAccessControlList::remove_canon_user_grant(rgw_user& user_id)
 {
   auto multi_map_iter = grant_map.find(user_id.to_str());
   if(multi_map_iter != grant_map.end()) {
-    grant_map.erase(multi_map_iter);
+    auto grants = grant_map.equal_range(user_id.to_str());
+    grant_map.erase(grants.first, grants.second);
   }
 
   auto map_iter = acl_user_map.find(user_id.to_str());

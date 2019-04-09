@@ -314,8 +314,7 @@ static int get_system_obj_attrs(RGWRados *store, struct req_state *s, rgw_raw_ob
   return ret;
 }
 
-int modify_obj_attr(RGWRados *store, RGWObjectCtx& obj_ctx, RGWBucketInfo& bucket_info, const rgw_obj& obj, const char* attr_name,
-		    bufferlist& attr_val)
+int modify_obj_attr(RGWRados *store, RGWObjectCtx& obj_ctx, RGWBucketInfo& bucket_info, const rgw_obj& obj, const char* attr_name, bufferlist& attr_val)
 {
   map<string, bufferlist> attrs;
   RGWRados::Object op_target(store, bucket_info, obj_ctx, obj);
@@ -5616,7 +5615,6 @@ void RGWCompleteMultipart::execute()
   }
 
   op_ret = get_obj_attrs(store, *static_cast<RGWObjectCtx *>(s->obj_ctx), s->bucket_info, meta_obj, attrs);
-
   if (op_ret < 0) {
     ldout(s->cct, 0) << "ERROR: failed to get obj attrs, obj=" << meta_obj
 		     << " ret=" << op_ret << dendl;
