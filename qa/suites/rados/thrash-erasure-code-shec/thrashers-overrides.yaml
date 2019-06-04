@@ -1,0 +1,7 @@
+overrides:
+  ceph:
+    conf:
+      osd:
+        osd max backfills: 3
+  thrashosds:
+    min_in: 8
