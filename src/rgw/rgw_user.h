@@ -157,6 +157,7 @@ struct RGWUserAdminOpState {
   rgw_user user_id;
   std::string user_email;
   std::string display_name;
+  rgw_user new_user_id;
   int32_t max_buckets;
   __u8 suspended;
   __u8 admin;
@@ -246,6 +247,13 @@ struct RGWUserAdminOpState {
       return;
 
     user_id = id;
+  }
+
+  void set_new_user_id(rgw_user& id) {
+    if (id.empty())
+      return;
+
+    new_user_id = id;
   }
 
   void set_user_email(std::string& email) {
@@ -431,6 +439,7 @@ struct RGWUserAdminOpState {
   std::string get_caps() { return caps; }
   std::string get_user_email() { return user_email; }
   std::string get_display_name() { return display_name; }
+  rgw_user& get_new_uid() { return new_user_id; }
   map<int, std::string>& get_temp_url_keys() { return temp_url_keys; }
 
   RGWUserInfo&  get_user_info() { return info; }
@@ -655,6 +664,8 @@ private:
   int execute_add(RGWUserAdminOpState& op_state, std::string *err_msg);
   int execute_remove(RGWUserAdminOpState& op_state, std::string *err_msg);
   int execute_modify(RGWUserAdminOpState& op_state, std::string *err_msg);
+  int execute_user_rename(RGWUserAdminOpState& op_state, std::string *err_msg);
+  int execute_rename(RGWUserAdminOpState& op_state, RGWUserInfo& old_user_info, std::string *err_msg);
 
 public:
   RGWUser();
@@ -676,6 +687,7 @@ public:
   /* API Contracted Methods */
   int add(RGWUserAdminOpState& op_state, std::string *err_msg = NULL);
   int remove(RGWUserAdminOpState& op_state, std::string *err_msg = NULL);
+  int rename(RGWUserAdminOpState& op_state, std::string *err_msg = NULL);
 
   /* remove an already populated RGWUser */
   int remove(std::string *err_msg = NULL);

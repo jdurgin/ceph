@@ -187,6 +187,90 @@ int rgw_bucket_sync_user_stats(RGWRados *store, const string& tenant_name, const
   return 0;
 }
 
+int rgw_bucket_chown(RGWRados* const store, RGWUserInfo& user_info, RGWBucketInfo& bucket_info, const string& marker, map<string, bufferlist>& attrs)
+{
+  RGWObjectCtx obj_ctx(store);
+  std::vector<rgw_bucket_dir_entry> objs;
+  map<string, bool> common_prefixes;
+
+  RGWRados::Bucket target(store, bucket_info);
+  RGWRados::Bucket::List list_op(&target);
+
+  list_op.params.list_versions = true;
+  list_op.params.allow_unordered = true;
+  list_op.params.marker = marker;
+
+  bool is_truncated = false;
+  int count = 0;
+  int max_entries = 1000;
+
+  //Loop through objects and update object acls to point to bucket owner
+
+  do {
+      objs.clear();
+      int ret = list_op.list_objects(max_entries, &objs, &common_prefixes, &is_truncated);
+      if (ret < 0) {
+        ldout(store->ctx(), 0) << "ERROR: list objects failed: " << cpp_strerror(-ret) << dendl;
+        return ret;
+      }
+
+      list_op.params.marker = list_op.get_next_marker();
+      count += objs.size();
+
+      for (const auto& obj : objs) {
+
+        const rgw_obj r_obj(bucket_info.bucket, obj.key);
+        ret = get_obj_attrs(store, obj_ctx, bucket_info, r_obj, attrs);
+        if (ret < 0){
+          ldout(store->ctx(), 0) << "ERROR: failed to read object " << obj.key.name << cpp_strerror(-ret) << dendl;
+          continue;
+        }
+        const auto& aiter = attrs.find(RGW_ATTR_ACL);
+        if (aiter == attrs.end()) {
+          ldout(store->ctx(), 0) << "ERROR: no acls found for object " << obj.key.name << " .Continuing with next object." << dendl;
+          continue;
+        } else {
+          bufferlist& bl = aiter->second;
+          RGWAccessControlPolicy policy(store->ctx());
+          ACLOwner owner;
+          try {
+            decode(policy, bl);
+            owner = policy.get_owner();
+          } catch (buffer::error& err) {
+            ldout(store->ctx(), 0) << "ERROR: decode policy failed" << err << dendl;
+            return -EIO;
+          }
+
+          //Get the ACL from the policy
+          RGWAccessControlList& acl = policy.get_acl();
+
+          //Remove grant that is set to old owner
+          acl.remove_canon_user_grant(owner.get_id());
+
+          //Create a grant and add grant
+          ACLGrant grant;
+          grant.set_canon(bucket_info.owner, user_info.display_name, RGW_PERM_FULL_CONTROL);
+          acl.add_grant(&grant);
+
+          //Update the ACL owner to the new user
+          owner.set_id(bucket_info.owner);
+          owner.set_name(user_info.display_name);
+          policy.set_owner(owner);
+
+          bl.clear();
+          encode(policy, bl);
+
+          ret = modify_obj_attr(store, obj_ctx, bucket_info, r_obj, RGW_ATTR_ACL, bl);
+          if (ret < 0) {
+            ldout(store->ctx(), 0) << "ERROR: modify attr failed " << cpp_strerror(-ret) << dendl;
+            return ret;
+          }
+        }
+      } cerr << count << " objects processed in " << bucket_info.bucket.name << " .Next marker " << list_op.params.marker.name << std::endl;
+    } while(is_truncated);
+    return 0;
+}
+
 int rgw_link_bucket(RGWRados* const store,
                     const rgw_user& user_id,
                     rgw_bucket& bucket,
@@ -990,14 +1074,11 @@ int RGWBucket::link(RGWBucketAdminOpState& op_state,
 int RGWBucket::chown(RGWBucketAdminOpState& op_state,
 	map<string, bufferlist>& attrs, const string& marker, std::string *err_msg)
 {
-
   //after bucket link
   rgw_bucket& bucket = op_state.get_bucket();
   tenant = bucket.tenant;
   bucket_name = bucket.name;
 
-  std::vector<rgw_bucket_dir_entry> objs;
-  map<string, bool> common_prefixes;
   RGWObjectCtx obj_ctx(store);
   RGWBucketInfo bucket_info;
 
@@ -1014,82 +1095,12 @@ int RGWBucket::chown(RGWBucketAdminOpState& op_state,
     return ret;
   }
 
-  RGWRados::Bucket target(store, bucket_info);
-  RGWRados::Bucket::List list_op(&target);
-
-  list_op.params.list_versions = true;
-  list_op.params.allow_unordered = true;
-  list_op.params.marker = marker;
-
-  bool is_truncated = false;
-  int count = 0;
-  int max_entries = 1000;
-
-  //Loop through objects and update object acls to point to bucket owner
-
-  do {
-      objs.clear();
-      ret = list_op.list_objects(max_entries, &objs, &common_prefixes, &is_truncated);
-      if (ret < 0) {
-        set_err_msg(err_msg, "list objects failed: " + cpp_strerror(-ret));
-        return ret;
-      }
-
-      list_op.params.marker = list_op.get_next_marker();
-      count += objs.size();
-
-      for (const auto& obj : objs) {
-
-        const rgw_obj r_obj(bucket_info.bucket, obj.key);
-        ret = get_obj_attrs(store, obj_ctx, bucket_info, r_obj, attrs);
-        if (ret < 0){
-          set_err_msg(err_msg, "failed to read object " + obj.key.name +  "with " + cpp_strerror(-ret));
-          continue;
-        }
-        const auto& aiter = attrs.find(RGW_ATTR_ACL);
-        if (aiter == attrs.end()) {
-          set_err_msg(err_msg, "no acls found for object " + obj.key.name + " .Continuing with next object." + cpp_strerror(-ret));
-          continue;
-        } else {
-          bufferlist& bl = aiter->second;
-          RGWAccessControlPolicy policy(store->ctx());
-          ACLOwner owner;
-          try {
-            decode(policy, bl);
-            owner = policy.get_owner();
-          } catch (buffer::error& err) {
-            set_err_msg(err_msg, "decode policy failed: ");
-            return -EIO;
-          }
-
-          //Get the ACL from the policy
-          RGWAccessControlList& acl = policy.get_acl();
-
-          //Remove grant that is set to old owner
-          acl.remove_canon_user_grant(owner.get_id());
-
-          //Create a grant and add grant
-          ACLGrant grant;
-          grant.set_canon(bucket_info.owner, user_info.display_name, RGW_PERM_FULL_CONTROL);
-          acl.add_grant(&grant);
-
-          //Update the ACL owner to the new user
-          owner.set_id(bucket_info.owner);
-          owner.set_name(user_info.display_name);
-          policy.set_owner(owner);
-
-          bl.clear();
-          encode(policy, bl);
-
-          ret = modify_obj_attr(store, obj_ctx, bucket_info, r_obj, RGW_ATTR_ACL, bl);
-          if (ret < 0) {
-            set_err_msg(err_msg, "modify attr failed: " + cpp_strerror(-ret));
-            return ret;
-          }
-        }
-      } cerr << count << " objects processed, next marker " << list_op.params.marker.name << std::endl;
-    } while(is_truncated);
-    return 0;
+  ret = rgw_bucket_chown(store, user_info, bucket_info, marker, attrs);
+  if (ret < 0) {
+    set_err_msg(err_msg, "Failed to change object ownership" + cpp_strerror(-ret));
+  }
+  
+  return ret;
 }
 
 int RGWBucket::unlink(RGWBucketAdminOpState& op_state, std::string *err_msg)
