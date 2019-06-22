@@ -31,20 +31,37 @@ ceph:
   - rbd-mirror-dbg
   - rbd-nbd-dbg
   rpm:
-  - ceph-radosgw
-  - ceph-test
   - ceph
+  - ceph-base
+  - ceph-common
+  - ceph-debuginfo
+  - ceph-fuse
+  - ceph-mds
   - ceph-mgr
   - ceph-mgr-dashboard
   - ceph-mgr-diskprediction-cloud
   - ceph-mgr-diskprediction-local
   - ceph-mgr-rook
   - ceph-mgr-ssh
-  - ceph-fuse
-  - libcephfs2
+  - ceph-mon
+  - ceph-osd
+  - ceph-radosgw
+  - ceph-selinux
+  - ceph-test
+  - libcephfs_jni1
   - libcephfs-devel
+  - libcephfs2
+  - librados-devel
   - librados2
+  - libradosstriper1
   - librbd1
-  - python-ceph
+  - librgw2
+  - python-ceph-argparse
+  - python-ceph-compat
+  - python-cephfs
+  - python-rados
+  - python-rbd
+  - python-rgw
   - rbd-fuse
-  - ceph-debuginfo
+  - rbd-nbd
+  - rbd-mirror
