@@ -2,18 +2,35 @@
 ceph:
   deb:
   - ceph
-  - ceph-mds
-  - ceph-mgr
+  - ceph-base
   - ceph-common
   - ceph-fuse
+  - ceph-mds
+  - ceph-mgr
+  - ceph-mgr-dashboard
+  - ceph-mgr-diskprediction-cloud
+  - ceph-mgr-diskprediction-local
+  - ceph-mgr-rook
+  - ceph-mgr-ssh
+  - ceph-mon
+  - ceph-osd
   - ceph-test
-  - radosgw
-  - python-ceph
-  - libcephfs2
   - libcephfs-dev
+  - libcephfs2
   - librados2
+  - libradosstriper1
   - librbd1
+  - librgw2
+  - python-ceph
+  - python-ceph-argparse
+  - python-cephfs
+  - python-rados
+  - python-rbd
+  - python-rgw
+  - radosgw
   - rbd-fuse
+  - rbd-nbd
+  - rbd-mirror
   - ceph-common-dbg
   - ceph-fuse-dbg
   - ceph-mds-dbg
