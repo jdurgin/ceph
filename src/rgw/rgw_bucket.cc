@@ -187,6 +187,30 @@ int rgw_bucket_sync_user_stats(RGWRados *store, const string& tenant_name, const
   return 0;
 }
 
+int rgw_set_bucket_acl(RGWRados* store, ACLOwner& owner, rgw_bucket& bucket, RGWBucketInfo& bucket_info, bufferlist& bl)
+{
+  RGWObjVersionTracker objv_tracker;
+  RGWObjVersionTracker old_version = bucket_info.objv_tracker;
+
+  int r = store->set_bucket_owner(bucket_info.bucket, owner);
+  if (r < 0) {
+    cerr << "ERROR: failed to set bucket owner: " << cpp_strerror(-r) << std::endl;
+    return r;
+  }
+
+  rgw_raw_obj obj_bucket_instance;
+  store->get_bucket_instance_obj(bucket, obj_bucket_instance);
+
+  r = store->system_obj_set_attr(NULL, obj_bucket_instance, RGW_ATTR_ACL,
+				 bl, &objv_tracker);
+  if (r < 0) {
+    cerr << "failed to set new acl: " << cpp_strerror(-r) << std::endl;
+    return r;
+  }
+  
+  return 0;
+}
+
 int rgw_bucket_chown(RGWRados* const store, RGWUserInfo& user_info, RGWBucketInfo& bucket_info, const string& marker, map<string, bufferlist>& attrs)
 {
   RGWObjectCtx obj_ctx(store);
@@ -1000,19 +1024,8 @@ int RGWBucket::link(RGWBucketAdminOpState& op_state,
   aclbl.clear();
   policy_instance.encode(aclbl);
 
-	// in jewel, rgw_bucket == ignores tenant.  MUST use newly
-	// added !=
-	//	...ick !
-  if (!(bucket != old_bucket)) {
-    r = store->set_bucket_owner(bucket_info.bucket, owner);
-    if (r < 0) {
-      set_err_msg(err_msg, "failed to set bucket owner: " + cpp_strerror(-r));
-      return r;
-    }
-
-    rgw_raw_obj obj_bucket_instance;
-    store->get_bucket_instance_obj(bucket, obj_bucket_instance);
-    r = store->system_obj_set_attr(NULL, obj_bucket_instance, RGW_ATTR_ACL, aclbl, &objv_tracker);
+  if (bucket == old_bucket) {
+    r = rgw_set_bucket_acl(store, owner, bucket, bucket_info, aclbl);
     if (r < 0) {
       set_err_msg(err_msg, "failed to set new acl");
       return r;
