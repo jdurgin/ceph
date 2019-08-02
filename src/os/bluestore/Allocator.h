@@ -21,7 +21,8 @@ class FreelistManager;
 
 class Allocator {
 public:
-  virtual ~Allocator() {}
+  explicit Allocator(const std::string& name);
+  virtual ~Allocator();
 
   virtual int reserve(uint64_t need) = 0;
   virtual void unreserve(uint64_t unused) = 0;
@@ -56,8 +57,9 @@ public:
   virtual uint64_t get_free() = 0;
   virtual double get_fragmentation_score();
   virtual void shutdown() = 0;
+
   static Allocator *create(CephContext* cct, string type, int64_t size,
-			   int64_t block_size);
+			   int64_t block_size, const std::string& name = "");
 };
 
 #endif

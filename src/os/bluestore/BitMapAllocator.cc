@@ -19,8 +19,8 @@
 
 
 BitMapAllocator::BitMapAllocator(CephContext* cct, int64_t device_size,
-				 int64_t block_size)
-  : cct(cct)
+				 int64_t block_size, const std::string& name)
+  : Allocator(name), cct(cct)
 {
   if (!ISP2(block_size)) {
     derr << __func__ << " block_size " << block_size
