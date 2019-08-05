@@ -41,6 +41,7 @@
 
 #include "bluestore_types.h"
 #include "BlockDevice.h"
+#include "BlueFS.h"
 #include "common/EventTrace.h"
 
 class Allocator;
@@ -122,6 +123,7 @@ enum {
 };
 
 class BlueStore : public ObjectStore,
+                  public BlueFSDeviceExpander,
 		  public md_config_obs_t {
   // -----------------------------------------------------
   // types
@@ -2826,6 +2828,8 @@ private:
 			CollectionRef& c,
 			CollectionRef& d,
 			unsigned bits, int rem);
+private:
+  size_t available_freespace(uint64_t alloc_size) override;
 };
 
 inline ostream& operator<<(ostream& out, const BlueStore::OpSequencer& s) {
