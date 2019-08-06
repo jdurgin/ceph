@@ -417,18 +417,17 @@ int rgw_remove_key_index(RGWRados *store, RGWAccessKey& access_key)
 
 int rgw_remove_uid_index(RGWRados *store, rgw_user& uid)
 {
-  RGWObjVersionTracker objv_tracker;
-  RGWUserInfo info;
-  int ret = rgw_get_user_info_by_uid(store, uid, info, &objv_tracker, NULL);
-  if (ret < 0)
-    return ret;
+  return store->meta_mgr->remove_entry(user_meta_handler, uid.to_str(), nullptr);
+}
 
-  string oid = uid.to_str();
-  ret = store->meta_mgr->remove_entry(user_meta_handler, oid, &objv_tracker);
-  if (ret < 0)
-    return ret;
+int rgw_remove_user_buckets_index(RGWRados *store, rgw_user& uid)
+{
+  string buckets_obj_id;
+  rgw_get_buckets_obj(uid, buckets_obj_id);
+  rgw_raw_obj uid_bucks(store->get_zone_params().user_uid_pool, buckets_obj_id);
 
-  return 0;
+  RGWObjectCtx obj_ctx(store);
+  return (store->delete_system_obj(uid_bucks));
 }
 
 int rgw_remove_email_index(RGWRados *store, string& email)
@@ -486,24 +485,19 @@ int rgw_delete_user(RGWRados *store, RGWUserInfo& info, RGWObjVersionTracker& ob
     return ret;
   }
 
-  string buckets_obj_id;
-  rgw_get_buckets_obj(info.user_id, buckets_obj_id);
-  rgw_raw_obj uid_bucks(store->get_zone_params().user_uid_pool, buckets_obj_id);
   ldout(store->ctx(), 10) << "removing user buckets index" << dendl;
-  ret = store->delete_system_obj(uid_bucks);
+  ret = rgw_remove_user_buckets_index(store, info.user_id);
   if (ret < 0 && ret != -ENOENT) {
-    ldout(store->ctx(), 0) << "ERROR: could not remove " << info.user_id << ":" << uid_bucks << ", should be fixed (err=" << ret << ")" << dendl;
+    ldout(store->ctx(), 0) << "ERROR: could not remove user buckets index object for "
+        << info.user_id << ": " << ret << dendl;
     return ret;
   }
 
-  string key;
-  info.user_id.to_str(key);
-  
-  rgw_raw_obj uid_obj(store->get_zone_params().user_uid_pool, key);
   ldout(store->ctx(), 10) << "removing user index: " << info.user_id << dendl;
-  ret = store->meta_mgr->remove_entry(user_meta_handler, key, &objv_tracker);
-  if (ret < 0 && ret != -ENOENT && ret  != -ECANCELED) {
-    ldout(store->ctx(), 0) << "ERROR: could not remove " << info.user_id << ":" << uid_obj << ", should be fixed (err=" << ret << ")" << dendl;
+  ret = rgw_remove_uid_index(store, info.user_id);
+  if (ret < 0 && ret != -ENOENT) {
+    ldout(store->ctx(), 0) << "ERROR: could not remove " << info.user_id
+        << ": " << ret << dendl;
     return ret;
   }
 
@@ -628,6 +622,11 @@ static bool remove_old_indexes(RGWRados *store,
     ret = rgw_remove_uid_index(store, old_info.user_id);
     if (ret < 0 && ret != -ENOENT) {
       set_err_msg(err_msg, "ERROR: could not remove index for uid " + old_info.user_id.to_str());
+      success = false;
+    }
+    ret = rgw_remove_user_buckets_index(store, old_info.user_id);
+    if (ret < 0 && ret != -ENOENT) {
+      set_err_msg(err_msg, "ERROR: could not remove buckets index for uid " + old_info.user_id.to_str());
       success = false;
     }
   }
