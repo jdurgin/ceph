@@ -4748,7 +4748,7 @@ int BlueStore::_open_db_and_around()
       goto out_db;
     }
 
-    r = _open_fm(nullptr);
+    r = _open_fm(false);
     if (r < 0)
       goto out_db;
 
@@ -4766,7 +4766,7 @@ int BlueStore::_open_db_and_around()
       goto out_db;
     }
 
-    r = _open_fm(nullptr);
+    r = _open_fm(false);
     if (r < 0)
       goto out_db;
 
