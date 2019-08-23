@@ -178,10 +178,11 @@ extern int rgw_read_user_buckets(RGWRados *store,
                                  uint64_t default_amount = 1000);
 
 struct rgw_ep_info {
-    RGWBucketEntryPoint &ep;
-    map<string, bufferlist>& attrs;
-    rgw_ep_info(RGWBucketEntryPoint &ep, map<string, bufferlist>& attrs)
-	: ep(ep), attrs(attrs) { }
+  RGWBucketEntryPoint &ep;
+  map<string, bufferlist>& attrs;
+  RGWObjVersionTracker ep_objv;
+  rgw_ep_info(RGWBucketEntryPoint &ep, map<string, bufferlist>& attrs)
+    : ep(ep), attrs(attrs) { }
 };
 
 extern int rgw_link_bucket(RGWRados* store,
