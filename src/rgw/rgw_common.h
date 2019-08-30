@@ -1131,6 +1131,11 @@ struct rgw_bucket {
     return (tenant != b.tenant) || (name != b.name) ||
            (bucket_id != b.bucket_id);
   }
+  static bool full_equal(const rgw_bucket& a, const rgw_bucket&b) {
+    return (a.name == b.name) && (a.bucket_id == b.bucket_id) &&
+      (a.tenant == b.tenant);
+  }
+
 };
 WRITE_CLASS_ENCODER(rgw_bucket)
 
