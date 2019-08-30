@@ -1031,7 +1031,7 @@ int RGWBucket::link(RGWBucketAdminOpState& op_state,
   aclbl.clear();
   policy_instance.encode(aclbl);
 
-  if (bucket.tenant == old_bucket.tenant) {
+  if (bucket == old_bucket) {
     r = rgw_set_bucket_acl(store, owner, bucket, bucket_info, aclbl);
     if (r < 0) {
       set_err_msg(err_msg, "failed to set new acl");
