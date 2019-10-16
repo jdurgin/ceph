@@ -853,6 +853,43 @@ void BlueStore::Cache::trim(uint64_t onode_max, uint64_t buffer_max)
   _trim(onode_max, buffer_max);
 }
 
+void BlueStore::Cache::_pin(BlueStore::Onode& o)
+{
+  if (o.pinned == true) {
+    return;
+  }
+  onode_lru.erase(onode_lru.iterator_to(o));
+  pin_list.push_front(o);
+  o.pinned = true;
+  num_onodes = onode_lru.size();
+  num_pinned = pin_list.size();
+  dout(30) << __func__ << " " << o.oid << " pinned" << dendl;
+}
+
+void BlueStore::Cache::_unpin(BlueStore::Onode& o)
+{
+  if (o.pinned == false) {
+    return;
+  }
+  pin_list.erase(pin_list.iterator_to(o));
+  onode_lru.push_front(o);
+  o.pinned = false;
+  num_onodes = onode_lru.size();
+  num_pinned = pin_list.size();
+  dout(30) << __func__ << " " << o.oid << " unpinned" << dendl;
+}
+
+void BlueStore::Cache::_touch_onode(OnodeRef& o)
+{
+  if (o->pinned) {
+    return;
+  }
+  auto p = onode_lru.iterator_to(*o);
+  onode_lru.erase(p);
+  onode_lru.push_front(*o);
+  num_onodes = onode_lru.size();
+}
+
 void BlueStore::Cache::trim_all()
 {
   std::lock_guard<std::recursive_mutex> l(lock);
@@ -863,16 +900,9 @@ void BlueStore::Cache::trim_all()
 #undef dout_prefix
 #define dout_prefix *_dout << "bluestore.LRUCache(" << this << ") "
 
-void BlueStore::LRUCache::_touch_onode(OnodeRef& o)
+void BlueStore::LRUCache::_trim(uint64_t new_onode_size, uint64_t buffer_max)
 {
-  auto p = onode_lru.iterator_to(*o);
-  onode_lru.erase(p);
-  onode_lru.push_front(*o);
-}
-
-void BlueStore::LRUCache::_trim(uint64_t onode_max, uint64_t buffer_max)
-{
-  dout(20) << __func__ << " onodes " << onode_lru.size() << " / " << onode_max
+  dout(20) << __func__ << " onodes " << onode_lru.size() << " / " << new_onode_size
 	   << " buffers " << buffer_size << " / " << buffer_max
 	   << dendl;
 
@@ -893,47 +923,28 @@ void BlueStore::LRUCache::_trim(uint64_t onode_max, uint64_t buffer_max)
   }
 
   // onodes
-  if (onode_max >= onode_lru.size()) {
+  if (new_onode_size >= onode_lru.size()) {
     return; // don't even try
   }
-  uint64_t num = onode_lru.size() - onode_max;
+  uint64_t n = onode_lru.size() - new_onode_size;
 
   auto p = onode_lru.end();
   assert(p != onode_lru.begin());
   --p;
-  int skipped = 0;
-  int max_skipped = g_conf->bluestore_cache_trim_max_skip_pinned;
-  while (num > 0) {
+  while (n > 0) {
     Onode *o = &*p;
-    int refs = o->nref.load();
-    if (refs > 1) {
-      dout(20) << __func__ << "  " << o->oid << " has " << refs
-	       << " refs, skipping" << dendl;
-      if (++skipped >= max_skipped) {
-        dout(20) << __func__ << " maximum skip pinned reached; stopping with "
-                 << num << " left to trim" << dendl;
-        break;
-      }
-
-      if (p == onode_lru.begin()) {
-        break;
-      } else {
-        p--;
-        num--;
-        continue;
-      }
-    }
     dout(30) << __func__ << "  rm " << o->oid << dendl;
     if (p != onode_lru.begin()) {
       onode_lru.erase(p--);
     } else {
       onode_lru.erase(p);
-      assert(num == 1);
+      assert(n == 1);
     }
+    o->s = nullptr;
     o->get();  // paranoia
     o->c->onode_map.remove(o->oid);
     o->put();
-    --num;
+    --n;
   }
 }
 
@@ -962,13 +973,6 @@ void BlueStore::LRUCache::_audit(const char *when)
 #undef dout_prefix
 #define dout_prefix *_dout << "bluestore.2QCache(" << this << ") "
 
-
-void BlueStore::TwoQCache::_touch_onode(OnodeRef& o)
-{
-  auto p = onode_lru.iterator_to(*o);
-  onode_lru.erase(p);
-  onode_lru.push_front(*o);
-}
 
 void BlueStore::TwoQCache::_add_buffer(Buffer *b, int level, Buffer *near)
 {
@@ -1088,9 +1092,9 @@ void BlueStore::TwoQCache::_adjust_buffer_size(Buffer *b, int64_t delta)
   }
 }
 
-void BlueStore::TwoQCache::_trim(uint64_t onode_max, uint64_t buffer_max)
+void BlueStore::TwoQCache::_trim(uint64_t new_onode_size, uint64_t buffer_max)
 {
-  dout(20) << __func__ << " onodes " << onode_lru.size() << " / " << onode_max
+  dout(20) << __func__ << " onodes " << onode_lru.size() << " / " << new_onode_size
 	   << " buffers " << buffer_bytes << " / " << buffer_max
 	   << dendl;
 
@@ -1190,48 +1194,28 @@ void BlueStore::TwoQCache::_trim(uint64_t onode_max, uint64_t buffer_max)
   }
 
   // onodes
-  if (onode_max >= onode_lru.size()) {
+  if (new_onode_size >= onode_lru.size()) {
     return; // don't even try
   }
-  uint64_t num = onode_lru.size() - onode_max;
+  uint64_t n = onode_lru.size() - new_onode_size;
 
   auto p = onode_lru.end();
   assert(p != onode_lru.begin());
   --p;
-  int skipped = 0;
-  int max_skipped = g_conf->bluestore_cache_trim_max_skip_pinned;
-  while (num > 0) {
+  while (n > 0) {
     Onode *o = &*p;
-    dout(20) << __func__ << " considering " << o << dendl;
-    int refs = o->nref.load();
-    if (refs > 1) {
-      dout(20) << __func__ << "  " << o->oid << " has " << refs
-	       << " refs; skipping" << dendl;
-      if (++skipped >= max_skipped) {
-        dout(20) << __func__ << " maximum skip pinned reached; stopping with "
-                 << num << " left to trim" << dendl;
-        break;
-      }
-
-      if (p == onode_lru.begin()) {
-        break;
-      } else {
-        p--;
-        num--;
-        continue;
-      }
-    }
-    dout(30) << __func__ << " " << o->oid << " num=" << num <<" lru size="<<onode_lru.size()<< dendl;
+    dout(30) << __func__ << " " << o->oid << " n=" << n <<" lru size="<<onode_lru.size()<< dendl;
     if (p != onode_lru.begin()) {
       onode_lru.erase(p--);
     } else {
       onode_lru.erase(p);
-      assert(num == 1);
+      assert(n == 1);
     }
+    o->s = nullptr;
     o->get();  // paranoia
     o->c->onode_map.remove(o->oid);
     o->put();
-    --num;
+    --n;
   }
 }
 
@@ -4198,6 +4182,8 @@ void BlueStore::_init_logger()
 
   b.add_u64(l_bluestore_onodes, "bluestore_onodes",
 	    "Number of onodes in cache");
+  b.add_u64(l_bluestore_pinned_onodes, "bluestore_pinned_onodes",
+            "Number of pinned onodes in cache");
   b.add_u64_counter(l_bluestore_onode_hits, "bluestore_onode_hits",
 		    "Sum for onode-lookups hit in the cache");
   b.add_u64_counter(l_bluestore_onode_misses, "bluestore_onode_misses",
@@ -6777,15 +6763,17 @@ void BlueStore::_reap_collections()
 void BlueStore::_update_cache_logger()
 {
   uint64_t num_onodes = 0;
+  uint64_t num_pinned_onodes = 0;
   uint64_t num_extents = 0;
   uint64_t num_blobs = 0;
   uint64_t num_buffers = 0;
   uint64_t num_buffer_bytes = 0;
   for (auto c : cache_shards) {
-    c->add_stats(&num_onodes, &num_extents, &num_blobs,
+    c->add_stats(&num_onodes, &num_pinned_onodes, &num_extents, &num_blobs,
 		 &num_buffers, &num_buffer_bytes);
   }
   logger->set(l_bluestore_onodes, num_onodes);
+  logger->set(l_bluestore_pinned_onodes, num_pinned_onodes);
   logger->set(l_bluestore_extents, num_extents);
   logger->set(l_bluestore_blobs, num_blobs);
   logger->set(l_bluestore_buffers, num_buffers);

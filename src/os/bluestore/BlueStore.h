@@ -94,6 +94,7 @@ enum {
   l_bluestore_compressed_allocated,
   l_bluestore_compressed_original,
   l_bluestore_onodes,
+  l_bluestore_pinned_onodes,
   l_bluestore_onode_hits,
   l_bluestore_onode_misses,
   l_bluestore_onode_shard_hits,
@@ -1011,20 +1012,22 @@ public:
   };
 
   struct OnodeSpace;
-
+  struct Cache;
   /// an in-memory object
   struct Onode {
     MEMPOOL_CLASS_HELPERS();
+    // Not persisted and updated on cache insertion/removal
+    Cache *s;
+    bool pinned = false; // Only to be used by the onode cache shard
 
     std::atomic_int nref;  ///< reference count
     Collection *c;
-
     ghobject_t oid;
 
     /// key under PREFIX_OBJ where we are stored
     mempool::bluestore_cache_other::string key;
 
-    boost::intrusive::list_member_hook<> lru_item;
+    boost::intrusive::list_member_hook<> lru_item, pin_item;
 
     bluestore_onode_t onode;  ///< metadata stored as value in kv store
     bool exists;              ///< true if object logically exists
@@ -1039,7 +1042,8 @@ public:
 
     Onode(Collection *c, const ghobject_t& o,
 	  const mempool::bluestore_cache_other::string& k)
-      : nref(0),
+      : s(nullptr),
+        nref(0),
 	c(c),
 	oid(o),
 	key(k),
@@ -1049,11 +1053,18 @@ public:
 
     void flush();
     void get() {
-      ++nref;
+      if (++nref == 2 && s != nullptr) {
+        s->pin(*this);
+      }
     }
     void put() {
-      if (--nref == 0)
+      int n = --nref;
+      if (n == 1 && s != nullptr) {
+        s->unpin(*this);
+      }
+      if (n == 0) {
 	delete this;
+      }
     }
   };
   typedef boost::intrusive_ptr<Onode> OnodeRef;
@@ -1067,15 +1078,53 @@ public:
 
     std::atomic<uint64_t> num_extents = {0};
     std::atomic<uint64_t> num_blobs = {0};
+    std::atomic<uint64_t> num_onodes = {0};
+    std::atomic<uint64_t> num_pinned = {0};
+
+    typedef boost::intrusive::list<
+      Onode,
+      boost::intrusive::member_hook<
+        Onode,
+	boost::intrusive::list_member_hook<>,
+	&Onode::lru_item> > onode_lru_list_t;
+    typedef boost::intrusive::list<
+      BlueStore::Onode,
+      boost::intrusive::member_hook<
+	BlueStore::Onode,
+	boost::intrusive::list_member_hook<>,
+	&BlueStore::Onode::pin_item> > pin_list_t;
+
+    onode_lru_list_t onode_lru;
+    pin_list_t pin_list;
 
     static Cache *create(CephContext* cct, string type, PerfCounters *logger);
 
     Cache(CephContext* cct) : cct(cct), logger(nullptr) {}
     virtual ~Cache() {}
 
-    virtual void _add_onode(OnodeRef& o, int level) = 0;
-    virtual void _rm_onode(OnodeRef& o) = 0;
-    virtual void _touch_onode(OnodeRef& o) = 0;
+    uint64_t _get_num_onodes() {
+      return num_onodes;
+    }
+    void _add_onode(OnodeRef& o, int level) {
+      if (level > 0)
+	onode_lru.push_front(*o);
+      else
+	onode_lru.push_back(*o);
+      o->s = this;
+      num_onodes = onode_lru.size();
+    }
+    void _rm_onode(OnodeRef& o) {
+      o->s = nullptr;
+      if (o->pinned) {
+	o->pinned = false;
+	pin_list.erase(pin_list.iterator_to(*o));
+      } else {
+	onode_lru.erase(onode_lru.iterator_to(*o));
+      }
+      num_onodes = onode_lru.size();
+      num_pinned = pin_list.size();
+    }
+    void _touch_onode(OnodeRef& o);
 
     virtual void _add_buffer(Buffer *b, int level, Buffer *near) = 0;
     virtual void _rm_buffer(Buffer *b) = 0;
@@ -1083,7 +1132,6 @@ public:
     virtual void _adjust_buffer_size(Buffer *b, int64_t delta) = 0;
     virtual void _touch_buffer(Buffer *b) = 0;
 
-    virtual uint64_t _get_num_onodes() = 0;
     virtual uint64_t _get_buffer_bytes() = 0;
 
     void add_extent() {
@@ -1100,13 +1148,27 @@ public:
       --num_blobs;
     }
 
-    void trim(uint64_t onode_max, uint64_t buffer_max);
+    void trim(uint64_t new_onode_size, uint64_t buffer_max);
 
     void trim_all();
 
-    virtual void _trim(uint64_t onode_max, uint64_t buffer_max) = 0;
+    virtual void _trim(uint64_t new_onode_size, uint64_t buffer_max) = 0;
 
-    virtual void add_stats(uint64_t *onodes, uint64_t *extents,
+    void _pin(Onode& o);
+    void _unpin(Onode& o);
+
+    void pin(Onode& o) {
+      std::lock_guard<std::recursive_mutex> l(lock);
+      _pin(o);
+    }
+
+    void unpin(Onode& o) {
+      std::lock_guard<std::recursive_mutex> l(lock);
+      _unpin(o);
+    }
+    virtual void add_stats(uint64_t *onodes,
+			   uint64_t *pinned_onodes,
+			   uint64_t *extents,
 			   uint64_t *blobs,
 			   uint64_t *buffers,
 			   uint64_t *bytes) = 0;
@@ -1127,39 +1189,17 @@ public:
   struct LRUCache : public Cache {
   private:
     typedef boost::intrusive::list<
-      Onode,
-      boost::intrusive::member_hook<
-        Onode,
-	boost::intrusive::list_member_hook<>,
-	&Onode::lru_item> > onode_lru_list_t;
-    typedef boost::intrusive::list<
       Buffer,
       boost::intrusive::member_hook<
 	Buffer,
 	boost::intrusive::list_member_hook<>,
 	&Buffer::lru_item> > buffer_lru_list_t;
 
-    onode_lru_list_t onode_lru;
-
     buffer_lru_list_t buffer_lru;
     uint64_t buffer_size = 0;
 
   public:
     LRUCache(CephContext* cct) : Cache(cct) {}
-    uint64_t _get_num_onodes() override {
-      return onode_lru.size();
-    }
-    void _add_onode(OnodeRef& o, int level) override {
-      if (level > 0)
-	onode_lru.push_front(*o);
-      else
-	onode_lru.push_back(*o);
-    }
-    void _rm_onode(OnodeRef& o) override {
-      auto q = onode_lru.iterator_to(*o);
-      onode_lru.erase(q);
-    }
-    void _touch_onode(OnodeRef& o) override;
 
     uint64_t _get_buffer_bytes() override {
       return buffer_size;
@@ -1196,14 +1236,19 @@ public:
       _audit("_touch_buffer end");
     }
 
+
     void _trim(uint64_t onode_max, uint64_t buffer_max) override;
 
-    void add_stats(uint64_t *onodes, uint64_t *extents,
+
+    void add_stats(uint64_t *onodes,
+		   uint64_t *pinned_onodes,
+		   uint64_t *extents,
 		   uint64_t *blobs,
 		   uint64_t *buffers,
 		   uint64_t *bytes) override {
       std::lock_guard<std::recursive_mutex> l(lock);
-      *onodes += onode_lru.size();
+      *onodes += num_onodes + num_pinned;
+      *pinned_onodes += num_pinned;
       *extents += num_extents;
       *blobs += num_blobs;
       *buffers += buffer_lru.size();
@@ -1251,20 +1296,6 @@ public:
 
   public:
     TwoQCache(CephContext* cct) : Cache(cct) {}
-    uint64_t _get_num_onodes() override {
-      return onode_lru.size();
-    }
-    void _add_onode(OnodeRef& o, int level) override {
-      if (level > 0)
-	onode_lru.push_front(*o);
-      else
-	onode_lru.push_back(*o);
-    }
-    void _rm_onode(OnodeRef& o) override {
-      auto q = onode_lru.iterator_to(*o);
-      onode_lru.erase(q);
-    }
-    void _touch_onode(OnodeRef& o) override;
 
     uint64_t _get_buffer_bytes() override {
       return buffer_bytes;
@@ -1293,12 +1324,15 @@ public:
 
     void _trim(uint64_t onode_max, uint64_t buffer_max) override;
 
-    void add_stats(uint64_t *onodes, uint64_t *extents,
+    void add_stats(uint64_t *onodes,
+		   uint64_t *pinned_onodes,
+		   uint64_t *extents,
 		   uint64_t *blobs,
 		   uint64_t *buffers,
 		   uint64_t *bytes) override {
       std::lock_guard<std::recursive_mutex> l(lock);
-      *onodes += onode_lru.size();
+      *onodes += num_onodes + num_pinned;
+      *pinned_onodes += num_pinned;
       *extents += num_extents;
       *blobs += num_blobs;
       *buffers += buffer_hot.size() + buffer_warm_in.size();
