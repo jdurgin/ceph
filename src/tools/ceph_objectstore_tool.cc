@@ -1677,7 +1677,7 @@ int ObjectStoreTool::do_import(ObjectStore *store, OSDSuperblock& sb,
       && pgb.superblock.cluster_fsid != sb.cluster_fsid) {
     cerr << "Export came from different cluster with fsid "
          << pgb.superblock.cluster_fsid << std::endl;
-    return -EINVAL;
+//    return -EINVAL;
   }
 
   if (debug) {
@@ -1709,7 +1709,7 @@ int ObjectStoreTool::do_import(ObjectStore *store, OSDSuperblock& sb,
   if (!curmap.have_pg_pool(pgid.pgid.m_pool)) {
     cerr << "Pool " << pgid.pgid.m_pool << " no longer exists" << std::endl;
     // Special exit code for this error, used by test code
-    return 10;  // Positive return means exit status
+    //return 10;  // Positive return means exit status
   }
 
   ghobject_t pgmeta_oid = pgid.make_pgmeta_oid();
@@ -3402,6 +3402,17 @@ int main(int argc, char **argv)
   p = bl.begin();
   ::decode(superblock, p);
 
+  if (debug) {
+      ObjectStore::Transaction tran;
+      ObjectStore::Transaction *t = &tran;
+
+      superblock.current_epoch = 1263952;
+      bufferlist sbl;
+      ::encode(superblock, sbl);
+      t->write(coll_t::meta(), OSD_SUPERBLOCK_GOBJECT, 0, sbl.length(), sbl);
+      fs->apply_transaction(osr, std::move(*t));
+      return 0;
+  }
   if (debug) {
     cerr << "Cluster fsid=" << superblock.cluster_fsid << std::endl;
   }
