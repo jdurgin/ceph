@@ -2,6 +2,15 @@
 
 image_base="quay.io/ceph-ci/ceph"
 
+if [ -x /usr/bin/podman ]; then
+    runtime="podman"
+elif [ -x /usr/bin/docker ]; then
+    runtime="docker"
+else
+    echo "cannot find podman or docker in PATH"
+    exit 1
+fi
+
 # fsid
 if [ -e fsid ] ; then
     fsid=`cat fsid`
@@ -39,7 +48,7 @@ fi
 echo "port $port"
 
 # make sure we have an image
-if ! podman image inspect $image_base:$shortid 2>/dev/null; then
+if ! $runtime image inspect $image_base:$shortid 2>/dev/null; then
     echo "building initial $image_base:$shortid image..."
     sudo ../src/script/cpatch -t $image_base:$shortid
 fi
