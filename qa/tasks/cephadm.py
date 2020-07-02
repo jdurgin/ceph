@@ -338,8 +338,8 @@ def ceph_bootstrap(ctx, config, registry):
             wait=False,
             started=True,
         )
+        first_mgr = ctx.ceph[cluster_name].first_mgr
         if not ctx.ceph[cluster_name].roleless:
-            first_mgr = ctx.ceph[cluster_name].first_mgr
             ctx.daemons.register_daemon(
                 bootstrap_remote, 'mgr', first_mgr,
                 cluster=cluster_name,
@@ -363,11 +363,12 @@ def ceph_bootstrap(ctx, config, registry):
             '--output-keyring',
             '/etc/ceph/{}.client.admin.keyring'.format(cluster_name),
             '--output-pub-ssh-key', '{}/{}.pub'.format(testdir, cluster_name),
+            '--mon-id', first_mon,
+            '--mgr-id', first_mgr,
+
         ]
         if not ctx.ceph[cluster_name].roleless:
             cmd += [
-                '--mon-id', first_mon,
-                '--mgr-id', first_mgr,
                 '--orphan-initial-daemons',   # we will do it explicitly!
                 '--skip-monitoring-stack',    # we'll provision these explicitly
             ]
@@ -1051,11 +1052,13 @@ def initialize_config(ctx, config):
     if config.get('roleless', False):
         # mons will be named after hosts
         first_mon = None
+        first_mgr = None
         for remote, _ in remotes_and_roles:
             ctx.cluster.remotes[remote].append('mon.' + remote.shortname)
             if not first_mon:
                 first_mon = remote.shortname
                 bootstrap_remote = remote
+                first_mgr = remote.shortname
         log.info('No mon roles; fabricating mons')
 
     roles = [role_list for (remote, role_list) in ctx.cluster.remotes.items()]
@@ -1088,8 +1091,8 @@ def initialize_config(ctx, config):
         if not mgrs:
             raise RuntimeError('no mgrs on the same host as first mon %s' % first_mon)
         _, _, first_mgr = teuthology.split_role(mgrs[0])
-        log.info('First mgr is %s' % (first_mgr))
-        ctx.ceph[cluster_name].first_mgr = first_mgr
+    log.info('First mgr is %s' % (first_mgr))
+    ctx.ceph[cluster_name].first_mgr = first_mgr
     yield
 
 @contextlib.contextmanager
