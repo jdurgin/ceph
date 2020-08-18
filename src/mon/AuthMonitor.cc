@@ -386,7 +386,7 @@ void AuthMonitor::increase_max_global_id()
 
 bool AuthMonitor::should_propose(double& delay)
 {
-  return (!pending_auth.empty());
+  return (!pending_auth.empty() || PaxosService::should_propose(delay));
 }
 
 void AuthMonitor::create_pending()
