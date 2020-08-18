@@ -495,7 +495,9 @@ version_t AuthMonitor::get_trim_to() const
 bool AuthMonitor::preprocess_query(MonOpRequestRef op)
 {
   auto m = op->get_req<PaxosServiceMessage>();
-  dout(10) << "preprocess_query " << *m << " from " << m->get_orig_source_inst() << dendl;
+  if (g_conf()->subsys.should_gather(dout_subsys, 10)) {
+    dout(10) << "preprocess_query " << *m << " from " << m->get_orig_source_inst() << dendl;
+  }
   switch (m->get_type()) {
   case MSG_MON_COMMAND:
     try {
