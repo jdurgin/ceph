@@ -1091,6 +1091,7 @@ def initialize_config(ctx, config):
         if not mgrs:
             raise RuntimeError('no mgrs on the same host as first mon %s' % first_mon)
         _, _, first_mgr = teuthology.split_role(mgrs[0])
+    log.info('First mon is %s' % (first_mon))
     log.info('First mgr is %s' % (first_mgr))
     ctx.ceph[cluster_name].first_mgr = first_mgr
     yield
