@@ -1278,7 +1278,14 @@ bool AuthMonitor::valid_caps(
     if (!moncap.parse(caps, out)) {
       return false;
     }
-  } else if (type == "mgr") {
+    return true;
+  }
+
+  if (!g_conf()->mon_auth_validate_all_caps) {
+    return true;
+  }
+
+  if (type == "mgr") {
     MgrCap mgrcap;
     if (!mgrcap.parse(caps, out)) {
       return false;

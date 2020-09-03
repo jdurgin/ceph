@@ -305,6 +305,7 @@ OPTION(mon_keyvaluedb, OPT_STR)   // type of keyvaluedb backend
 OPTION(mon_debug_unsafe_allow_tier_with_nonempty_snaps, OPT_BOOL)
 OPTION(mon_osd_blacklist_default_expire, OPT_DOUBLE) // default one hour
 OPTION(mon_osd_crush_smoke_test, OPT_BOOL)
+OPTION(mon_auth_validate_all_caps, OPT_BOOL)
 
 OPTION(paxos_stash_full_interval, OPT_INT)   // how often (in commits) to stash a full copy of the PaxosService state
 OPTION(paxos_max_join_drift, OPT_INT) // max paxos iterations before we must first sync the monitor stores
