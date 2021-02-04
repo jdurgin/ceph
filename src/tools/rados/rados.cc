@@ -411,7 +411,11 @@ void dump_name(Formatter *formatter, const librados::NObjectIterator& i, [[maybe
   }
 #endif
 
-  formatter->dump_string("name", i->get_oid());
+  bufferlist bl;
+  stringstream ss;
+  bl.append(i->get_oid());
+  bl.hexdump(ss, false);
+  formatter->dump_string("name", ss.str());
 }
 
 } // namespace detail
@@ -563,7 +567,7 @@ static int do_put(IoCtx& io_ctx,
             uint64_t obj_offset, bool create_object,
             const bool use_striper)
 {
-  string oid(objname);
+  string oid(string(objname) + "\0end"s);
   bool stdio = (strcmp(infile, "-") == 0);
   int ret = 0;
   int fd = STDIN_FILENO;
