@@ -74,6 +74,7 @@ Current CLT members are:
  * Patrick Donnelly <pdonnell@redhat.com>
  * Sage Weil <sage@redhat.com>
  * Sam Just <sjust@redhat.com>
+ * Venky Shankar <vshankar@redhat.com>
  * Xie Xingguo <xie.xingguo@zte.com.cn>
  * Yehuda Sadeh <yehuda@redhat.com>
  * Yuri Weinstein <yweinste@redhat.com>

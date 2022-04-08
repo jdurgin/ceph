@@ -16,14 +16,11 @@ their nicks on `GitHub`_:
 ========= ================ =============
 Scope     Lead             GitHub nick
 ========= ================ =============
-Ceph      Sage Weil        liewegas
 RADOS     Neha Ojha        neha-ojha
-RGW       Yehuda Sadeh     yehudasa
-RGW       Matt Benjamin    mattbenjamin
+RGW       Casey Bodley     cbodley
 RBD       Ilya Dryomov     dis 
-CephFS    Patrick Donnelly batrick
+CephFS    Venky Shankar    vshankar
 Dashboard Ernesto Puerta   epuertat
-MON       Joao Luis        jecluis
 Build/Ops Ken Dreyer       ktdreyer
 Docs      Zac Dover        zdover23
 ========= ================ =============
