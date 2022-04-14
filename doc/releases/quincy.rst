@@ -142,7 +142,22 @@ RADOS
 RBD block storage
 ~~~~~~~~~~~~~~~~~
 
-## TODO
+* rbd-nbd: `rbd device attach` and `rbd device detach` commands added,
+  these allow for safe reattach after rbd-nbd restarts since Linux
+  kernel 5.14
+
+* Large stabilization effort for persistent writeback caching on SSD -
+  see
+  https://docs.ceph.com/en/quincy/rbd/rbd-persistent-write-log-cache/
+  for details on usage.
+
+* Several bug fixes in diff calculation when using fast-diff + whole
+  object mode. In some cases these bugs could cause an incorrect 'rbd
+  export'. Also fixed in 15.2.16 and 16.2.8.
+
+* Fix for Windows VM performance degradation when using kernel rbd -
+  use `rbd device map -o rxbounce` to enable this.
+
 
 RGW object storage
 ~~~~~~~~~~~~~~~~~~
