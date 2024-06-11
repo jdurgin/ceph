@@ -73,29 +73,45 @@ tasks:
 - print: "****  done reef about to install v18.2.0 "
 - install:
     tag: v18.2.0
-    # line below can be removed its from jewel test
-    #exclude_packages: ['ceph-mgr','libcephfs2','libcephfs-devel','libcephfs-dev', 'librgw2']
+- cephadm:
+    image: quay.io/ceph/ceph:v18.2.0
+    cephadm_branch: reef
+    cephadm_git_url: https://github.com/ceph/ceph
+    conf:
+      osd:
+        #set config option for which cls modules are allowed to be loaded / used
+        osd_class_load_list: "*"
+        osd_class_default_list: "*"
 - print: "**** done v18.2.0 install"
-- ceph:
-   fs: xfs
-   add_osds_to_crush: true
-- print: "**** done ceph xfs"
+- cephadm.shell:
+    mon.a:
+      - ceph config set mgr mgr/cephadm/use_repo_digest true --force
+- print: "**** done cephadm.shell ceph config set mgr..."
 - sequential:
    - workload
 - print: "**** done workload v18.2.0"
 
-
 #######  upgrade to v18.2.1
 - install.upgrade:
-    #exclude_packages: ['ceph-mgr','libcephfs2','libcephfs-devel','libcephfs-dev']
     mon.a:
       tag: v18.2.1
     mon.b:
       tag: v18.2.1
 - parallel:
    - workload_reef
-   - upgrade-sequence_reef
+   - upgrade-sequence_18-2-1
 - print: "**** done parallel reef v18.2.1"
+
+#######  upgrade to v18.2.2
+- install.upgrade:
+    mon.a:
+      tag: v18.2.2
+    mon.b:
+      tag: v18.2.2
+- parallel:
+   - workload_reef
+   - upgrade-sequence_18-2-2
+- print: "**** done parallel reef v18.2.2"
 
 ####  upgrade to latest reef
 - install.upgrade:
@@ -134,40 +150,43 @@ workload_reef:
          size: 134217728
      - print: "**** done rbd_fsx workload_reef"
 
+upgrade-sequence_18-2-1:
+   sequential:
+   - print: "**** done start upgrade 18.2.1, wait"
+   - cephadm.shell:
+       mon.a:
+         - ceph config set global log_to_journald false --force
+         - ceph orch upgrade start --image quay.io/ceph/ceph:v18.2.1
+         - while ceph orch upgrade status | jq '.in_progress' | grep true ; do ceph orch ps ; ceph versions ; sleep 30 ; done
+         - ceph orch ps
+         - ceph versions
+         - ceph versions | jq -e '.overall | length == 1'
+         - ceph versions | jq -e '.overall | keys' | grep 7fe91d5d5842e04be3b4f514d6dd990c54b29c76
+   - print: "**** done end upgrade, wait..."
+
+upgrade-sequence_18-2-2:
+   sequential:
+   - print: "**** done start upgrade 18.2.2, wait"
+   - cephadm.shell:
+       mon.a:
+         - ceph orch upgrade start --image quay.io/ceph/ceph:v18.2.2
+         - while ceph orch upgrade status | jq '.in_progress' | grep true ; do ceph orch ps ; ceph versions ; sleep 30 ; done
+         - ceph orch ps
+         - ceph versions
+         - ceph versions | jq -e '.overall | length == 1'
+         - ceph versions | jq -e '.overall | keys' | grep 531c0d11a1c5d39fbfe6aa8a521f023abf3bf3e2
+   - print: "**** done end upgrade, wait..."
+
 upgrade-sequence_reef:
    sequential:
-   - print: "**** done branch: reef install.upgrade"
-   - ceph.restart: [mds.a]
-   - sleep:
-       duration: 60
-   - ceph.restart: [osd.0]
-   - sleep:
-       duration: 30
-   - ceph.restart: [osd.1]
-   - sleep:
-       duration: 30
-   - ceph.restart: [osd.2]
-   - sleep:
-       duration: 30
-   - ceph.restart: [osd.3]
-   - sleep:
-       duration: 30
-   - ceph.restart: [osd.4]
-   - sleep:
-       duration: 30
-   - ceph.restart: [osd.5]
-   - sleep:
-       duration: 60
-   - ceph.restart: [mgr.x]
-   - sleep:
-       duration: 60
-   - ceph.restart: [mon.a]
-   - sleep:
-       duration: 60
-   - ceph.restart: [mon.b]
-   - sleep:
-       duration: 60
-   - ceph.restart: [mon.c]
-   - sleep:
-       duration: 60
-   - print: "**** done ceph.restart all reef branch mds/osd/mon"
+   - print: "**** done start upgrade, wait"
+   - cephadm.shell:
+       env: [sha1]
+       mon.a:
+         - ceph orch upgrade start --image quay.ceph.io/ceph-ci/ceph:$sha1
+         - while ceph orch upgrade status | jq '.in_progress' | grep true ; do ceph orch ps ; ceph versions ; sleep 30 ; done
+         - ceph orch ps
+         - ceph versions
+         - ceph versions | jq -e '.overall | length == 1'
+         - ceph versions | jq -e '.overall | keys' | grep $sha1
+   - print: "**** done end upgrade, wait..."
